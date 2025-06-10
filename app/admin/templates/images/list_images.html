@@ -1,0 +1,80 @@
+{# F:\dev\BrogDev\app\admin\templates\images\list_images.html #}
+{% extends "base.html" %}
+
+{% block title %}画像管理{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>画像管理</h2>
+    <hr>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }}">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <div class="mb-3">
+        {# 変更: 画像アップロードフォームへのリンクに修正 #}
+        <a href="{{ url_for('admin.show_bulk_upload_form') }}" class="btn btn-primary">画像をまとめてアップロード</a>
+        {# または、単一ファイルアップロードフォームがある場合は以下を使用 #}
+        {# <a href="{{ url_for('admin.upload_image') }}" class="btn btn-primary">新しい画像をアップロード (単一)</a> #}
+    </div>
+
+    <div class="row row-cols-1 row-cols-md-3 g-4">
+        {% if images %}
+            {% for image in images %}
+            <div class="col">
+                <div class="card h-100">
+                    <div class="card-img-top-container">
+                        {# 変更: thumbnail_url プロパティを使用し、存在チェックを追加 #}
+                        {% if image.thumbnail_url %}
+                        <img src="{{ image.thumbnail_url }}"
+                             class="card-img-top"
+                             alt="{{ image.alt_text or image.original_filename }}"
+                             style="object-fit: cover; height: 200px;">
+                        {% else %}
+                        {# サムネイルがない場合の代替画像 #}
+                        <img src="{{ url_for('static', filename='images/placeholder.png') }}"
+                             class="card-img-top"
+                             alt="{{ image.alt_text or image.original_filename }} (サムネイルなし)"
+                             style="object-fit: cover; height: 200px;">
+                        {% endif %}
+                    </div>
+                    <div class="card-body">
+                        <h5 class="card-title text-truncate" title="{{ image.original_filename }}">
+                            {{ image.original_filename }}
+                        </h5>
+                        <p class="card-text text-muted small">
+                            <i class="fas fa-calendar-alt"></i> {{ image.uploaded_at.strftime('%Y-%m-%d %H:%M') }}<br>
+                            {# 変更: uploader プロパティを使用 (Userモデルのbackrefが'users'から'uploaded_images'に変わったため) #}
+                            {# Imageモデルのuploaderリレーションシップを指しているため、'uploader'を使用 #}
+                            <i class="fas fa-user"></i> {{ image.uploader.username if image.uploader else '不明' }}
+                        </p>
+                        <p class="card-text small">
+                            <span class="badge bg-secondary">ID: {{ image.id }}</span><br>
+                            {# 変更: url プロパティを使用 #}
+                            <span class="badge bg-info text-dark">URL: {{ image.url }}</span>
+                        </p>
+                    </div>
+                    <div class="card-footer d-flex justify-content-between">
+                        <form action="{{ url_for('admin.delete_image', image_id=image.id) }}" method="POST" onsubmit="return confirm('本当にこの画像を削除しますか？関連する投稿に影響が出る可能性があります。');">
+                            {# CSRFトークンを必ず含める #}
+                            {{ csrf_token() }}
+                            <button type="submit" class="btn btn-danger btn-sm">削除</button>
+                        </form>
+                        {# 編集機能など、他のアクションボタンをここに追加できます #}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+            <div class="col-12">
+                <p>まだ画像がアップロードされていません。</p>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

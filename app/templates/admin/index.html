@@ -1,0 +1,23 @@
+{# F:\dev\BrogDev\app\templates\admin\index.html #}
+{% extends "base.html" %}
+
+{% block title %}管理ダッシュボード{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>管理ダッシュボード</h2>
+    <p>管理者としてログインしています。</p>
+    <div class="row">
+        <div class="col-md-4">
+            <div class="card mb-3">
+                <div class="card-body">
+                    <h5 class="card-title">画像管理</h5>
+                    <p class="card-text">アップロードされた画像を管理します。</p>
+                    <a href="{{ url_for('admin.index') }}" class="btn btn-primary">管理画面へ</a>
+                </div>
+            </div>
+        </div>
+        {# 他の管理機能へのリンクカードを追加できます #}
+    </div>
+</div>
+{% endblock %}

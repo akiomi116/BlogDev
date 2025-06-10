@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>{{ title }}: {{ category.name }}</h2>
+    <form method="POST" action="{{ url_for('categories.edit_category', category_id=category.id) }}">
+        {{ form.csrf_token }} {# ★CSRFトークンを追加 #}
+        <div class="mb-3">
+            {{ form.name.label(class="form-label") }}
+            {{ form.name(class="form-control", value=category.name) }} {# ★form.nameを使用し、valueで初期値設定 #}
+            {% if form.name.errors %}
+                <div class="text-danger">
+                    {% for error in form.name.errors %}
+                        <span>{{ error }}</span>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        </div>
+        {{ form.submit(class="btn btn-primary") }} {# ★form.submitを使用 #}
+    </form>
+</div>
+{% endblock %}

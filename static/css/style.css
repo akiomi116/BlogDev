@@ -1,0 +1,36 @@
+body {
+    background-color: #00ffff; /* 非常に薄い青の背景 #f0f8ff*/
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.navbar {
+    box-shadow: 0 2px 4px rgba(0,0,0,.1); /* ナビバーに影を付けて浮き上がらせる */
+}
+
+.container {
+    max-width: 960px; /* コンテナの最大幅を設定 */
+    margin-top: 20px;
+}
+
+.card {
+    border: 1px solid #e0e0e0;
+    border-radius: .5rem;
+}
+
+.form-control {
+    border-radius: .25rem;
+}
+
+.btn-primary {
+    background-color: #007bff;
+    border-color: #007bff;
+}
+
+/* post_detail.html でMarkdownから生成される画像用 */
+.card-text img {
+    max-width: 100%; /* 親要素の幅を超えないようにする */
+    height: auto;    /* アスペクト比を維持する */
+    display: block;  /* 画像の下の余白をなくす（任意） */
+    margin-top: 1rem; /* 画像の上の余白（任意） */
+    margin-bottom: 1rem; /* 画像の下の余白（任意） */
+}

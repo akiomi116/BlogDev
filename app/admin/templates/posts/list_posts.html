@@ -1,0 +1,142 @@
+{# F:\dev\BrogDev\app\admin\templates\posts\list_posts.html #}
+
+{% extends "base.html" %}
+
+{% block title %}投稿管理{% endblock %}
+
+{% block head_extra %}
+    {{ super() }}
+    <style>
+        .post-thumbnail {
+            width: 80px; /* サムネイルの幅を固定 */
+            height: 60px; /* サムネイルの高さを固定 */
+            object-fit: cover; /* 画像を中央に配置し、コンテナを埋める */
+            border-radius: 4px; /* 角を丸くする */
+        }
+        .no-image-placeholder {
+            width: 80px;
+            height: 60px;
+            background-color: #e9ecef; /* 薄いグレーの背景 */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+            color: #6c757d; /* テキストの色 */
+            font-size: 0.8em; /* テキストサイズを調整 */
+            text-align: center;
+            line-height: 1.2;
+            word-break: break-all; /* 長い単語でも改行 */
+            padding: 2px;
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1 class="mb-4"><i class="fas fa-file-alt me-2"></i> 投稿管理</h1>
+    <p class="lead">ブログの投稿の新規作成、編集、公開状況の管理、および削除を行います。</p>
+
+    {# フラッシュメッセージの表示 #}
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="閉じる"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <div class="mb-3">
+        <a href="{{ url_for('admin.new_post') }}" class="btn btn-primary"><i class="fas fa-plus-circle me-2"></i> 新規投稿作成</a>
+    </div>
+
+    {# 投稿テーブルの表示など #}
+    <div class="table-responsive">
+        <table class="table table-hover table-striped align-middle"> {# align-middle を追加して垂直方向中央揃えに #}
+            <thead>
+                <tr>
+                    <th>画像</th> {# 新しく追加する画像カラム #}
+                    <th>タイトル</th>
+                    <th>カテゴリ</th>
+                    <th>タグ</th>
+                    <th>投稿者</th>
+                    <th>公開状態</th>
+                    <th>作成日</th>
+                    <th>更新日</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for post in posts %}
+                <tr>
+                    <td>
+                        {% if post.main_image and post.main_image.thumbnail_url %}
+                            <img src="{{ post.main_image.thumbnail_url }}" 
+                                 alt="{{ post.title }}" 
+                                 class="post-thumbnail">
+                        {% else %}
+                            <div class="no-image-placeholder">
+                                No Image
+                            </div>
+                        {% endif %}
+                    </td>
+                    <td><a href="{{ url_for('home.post_detail', post_id=post.id) }}">{{ post.title }}</a></td>
+                    <td>{{ post.category.name if post.category else 'なし' }}</td>
+                    <td>
+                        {% for tag in post.tags %}
+                            <span class="badge bg-info text-dark me-1">{{ tag.name }}</span>
+                        {% endfor %}
+                    </td>
+                    <td>{{ post.posted_by.username if post.posted_by else '不明' }}</td>
+                    <td>
+                        <form action="{{ url_for('admin.toggle_publish', post_id=post.id) }}" method="POST" class="d-inline">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"> 
+                            <button type="submit" class="btn btn-sm {% if post.is_published %}btn-success{% else %}btn-secondary{% endif %}">
+                                {% if post.is_published %}公開中{% else %}下書き{% endif %}
+                            </button>
+                        </form>
+                    </td>
+                    <td>{{ post.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                    <td>{{ post.updated_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                    <td>
+                        <a href="{{ url_for('admin.edit_post', post_id=post.id) }}" class="btn btn-sm btn-warning me-1"><i class="fas fa-edit"></i> 編集</a>
+                        <form action="{{ url_for('admin.delete_post', post_id=post.id) }}" method="POST" class="d-inline" onsubmit="return confirm('本当にこの投稿を削除しますか？');">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"> 
+                            <button type="submit" class="btn btn-sm btn-danger"><i class="fas fa-trash-alt"></i> 削除</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    {% if not posts %}
+        <p class="text-muted text-center mt-3">まだ投稿がありません。</p>
+    {% endif %}
+
+</div>
+{% endblock %}
+
+
+{% block scripts_extra %}
+    {{ super() }}
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js" xintegrity="sha384-geWF76RCwLtnZ8qwWowPQNguL3RmwHVBC9FhGdlKrxdiJJigF/h/6tIed9Ltxm+" crossorigin="anonymous"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+            var tooltipList = tooltipTriggerList.map(function(tooltipTriggerEl) {
+                return new bootstrap.Tooltip(tooltipTriggerEl);
+            });
+        });
+
+        function deletePost(postId, postTitle) {
+            document.getElementById('deletePostTitle').textContent = postTitle;
+            document.getElementById('deleteForm').action = `/admin/delete_post/${postId}`;
+            var deleteModal = new bootstrap.Modal(document.getElementById('deleteModal'));
+            deleteModal.show();
+        }
+    </script>
+{% endblock %}

@@ -1,0 +1,28 @@
+{# templates/macros/image_display.html #}
+{% macro post_image(post, image_map=None, class="card-img-top", style="height: 200px; object-fit: cover;") %}
+    {% if post.main_image_id and image_map and image_map.get(post.main_image_id) %}
+        {# 新しいImageモデルを使用 #}
+        {% set main_image = image_map[post.main_image_id] %}
+        <img src="{{ main_image.thumbnail_url }}" 
+             class="{{ class }}" 
+             alt="{{ main_image.alt_text or post.title }}"
+             style="{{ style }}">
+    {% elif post.image_filename %}
+        {# 古いimage_filenameを使用（サムネイルがあればそれを、なければオリジナルを） #}
+        <img src="{{ url_for('static', filename='uploads/thumbnails/thumb_' + post.image_filename) }}" 
+             class="{{ class }}" 
+             alt="{{ post.title }}"
+             style="{{ style }}"
+             onerror="this.src='{{ url_for('static', filename= post.image_filename) }}';">
+    {% else %}
+        {# デフォルト画像またはプレースホルダー #}
+        <div class="{{ class }} d-flex align-items-center justify-content-center" 
+             style="{{ style }}; background-color: #f8f9fa;">
+            <span class="text-muted">画像なし</span>
+        </div>
+    {% endif %}
+{% endmacro %}
+
+{# 使用例: #}
+{# {% from 'macros/image_display.html' import post_image %} #}
+{# {{ post_image(post, image_map) }} #}

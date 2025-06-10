@@ -1,0 +1,26 @@
+# F:\dev\BrogDev\app\admin\templates\users\change_user_role.html
+{% extends 'base.html' %} {# 必要に応じて admin/base.html を継承 #}
+{% block title %}ユーザーロール変更{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2 class="mb-4">ユーザー「{{ user.username }}」のロール変更</h2>
+
+    <form method="POST" action="">
+        {{ form.csrf_token }} {# CSRFトークンを必ず含める #}
+        <div class="form-group mb-3">
+            {{ form.role.label(class="form-label") }}
+            {{ form.role(class="form-control") }}
+            {% if form.role.errors %}
+                <div class="text-danger">
+                    {% for error in form.role.errors %}
+                        <span>{{ error }}</span>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        </div>
+        <button type="submit" class="btn btn-primary">ロールを変更</button>
+        <a href="{{ url_for('admin.manage_users') }}" class="btn btn-secondary">キャンセル</a>
+    </form>
+</div>
+{% endblock %}

@@ -1,0 +1,754 @@
+from flask import Flask, render_template, request, redirect, url_for, flash
+from flask_sqlalchemy import SQLAlchemy
+from flask_login import UserMixin, LoginManager, login_user, login_required, logout_user, current_user
+from werkzeug.security import generate_password_hash, check_password_hash
+
+import os
+from werkzeug.utils import secure_filename
+
+app = Flask(__name__)
+# データベースと秘密鍵の設定
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///akiomi.db'
+app.config['SECRET_KEY'] = '12341234'
+db = SQLAlchemy(app)
+login_manager = LoginManager()
+login_manager.init_app(app)
+
+# アップロードフォルダ設定
+app.config['UPLOAD_FOLDER'] = os.path.join('static', 'uploads')
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+#ユーザモデル定義
+class User(UserMixin, db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(100), unique=True, nullable=False)
+    email = db.Column(db.String(100), unique=True, nullable=False)  # メールアドレスの追加
+    password = db.Column(db.String(100), nullable=False)
+    name = db.Column(db.String(15), nullable=False)  # 投稿者名の追加
+    role = db.Column(db.String(10), nullable=False)  # 役割の追加（admin か poster）
+
+class Post(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(200), nullable=False)
+    content = db.Column(db.Text, nullable=False)
+    author_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    image_filename = db.Column(db.String(200))  # アップロードされた画像のファイル名
+    author = db.relationship('User', backref=db.backref('posts', lazy=True))
+    created_at = db.Column(db.DateTime, nullable=False, default=db.func.now())  # ✅ 自動設定
+    updated_at = db.Column(db.DateTime, onupdate=db.func.now())
+
+
+
+# ユーザーローダーの設定
+@login_manager.user_loader
+def load_user(user_id):
+    return User.query.get(int(user_id))
+
+# ホームページへのアクセスをログインページへリダイレクト
+@app.route('/')
+def redirect_to_login():
+    return redirect(url_for('login'))
+
+# ログインページ
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        email = request.form['email']
+        password = request.form['password']
+        user = User.query.filter_by(email=email).first()
+        
+        if user and check_password_hash(user.password, password):
+            login_user(user)
+            return redirect(url_for('dashboard'))
+        else:
+            flash('メールアドレスまたはパスワードが違います')  # エラーメッセージをフラッシュ
+            return redirect(url_for('login'))
+    return render_template('login.html')
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if request.method == 'POST':
+        username = request.form['username']
+        email = request.form['email']
+        password = request.form['password']
+        name = request.form['name']
+        role = request.form['role']
+
+        hashed_password = generate_password_hash(password, method='pbkdf2:sha256')
+        new_user = User(email=email, username=username, password=hashed_password, name=name, role=role)
+        db.session.add(new_user)
+        db.session.commit()
+
+        return redirect(url_for('login'))
+    return render_template('register.html')
+
+# ダッシュボード（認証後のページ）
+@app.route('/dashboard')
+@login_required
+def dashboard():
+    if current_user.role == 'admin':
+        posts = Post.query.all()
+    else:
+        posts = Post.query.filter_by(author_id=current_user.id).all()
+    return render_template('dashboard.html', posts=posts)
+
+@app.route('/posts/new', methods=['GET', 'POST'])
+@login_required
+def create_post():
+    if request.method == 'POST':
+        title = request.form['title']
+        content = request.form['content']
+        image_file = request.files.get('image')
+        
+        filename = None
+        if image_file and allowed_file(image_file.filename):
+            filename = secure_filename(image_file.filename)
+            image_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            image_file.save(image_path)
+        
+        new_post = Post(title=title, content=content, author_id=current_user.id,image_filename=filename)
+        db.session.add(new_post)
+        db.session.commit()
+        flash('投稿を作成しました')
+        return redirect(url_for('dashboard'))
+    return render_template('create_post.html')
+
+@app.route('/posts/<int:post_id>/edit', methods=['GET', 'POST'])
+@login_required
+def edit_post(post_id):
+    post = Post.query.get_or_404(post_id)
+    
+    # 編集フォームなどの処理を追加
+    # 投稿者でない場合は編集を禁止（管理者はOK）
+    if post.author_id != current_user.id and current_user.role != 'admin':
+        flash('この投稿を編集する権限がありません')
+        return redirect(url_for('dashboard'))
+
+    if request.method == 'POST':
+        post.title = request.form['title']
+        post.body = request.form['content']
+
+        image_file = request.files.get('image')
+        if image_file and allowed_file(image_file.filename):
+            filename = secure_filename(image_file.filename)
+            print(f"image_file.filename: {image_file.filename}")
+
+
+            image_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            image_file.save(image_path)
+            post.image_filename = filename  # 上書き保存
+        
+        db.session.commit()
+        flash('投稿を更新しました')
+        return redirect(url_for('dashboard'))
+    
+    return render_template('edit_post.html', post=post)
+
+@app.route('/posts/<int:post_id>/delete', methods=['POST'])
+@login_required
+def delete_post(post_id):
+    post = Post.query.get_or_404(post_id)
+
+    if post.author_id != current_user.id and current_user.role != 'admin':
+        flash('この投稿を削除する権限がありません')
+        return redirect(url_for('dashboard'))
+
+    db.session.delete(post)
+    db.session.commit()
+    flash('投稿を削除しました')
+    return redirect(url_for('dashboard'))
+
+
+# ログアウト
+@app.route('/logout')
+@login_required
+def logout():
+    logout_user()
+    return redirect(url_for('login'))
+
+# データベースの作成
+if __name__ == '__main__':
+    with app.app_context():
+        db.create_all()
+    app.run(debug=True)
+
+-----------------------------------------------------------------------
+{% extends "layout.html" %}
+{% block title %}新規投稿{% endblock %}
+{% block content %}
+<div class="container">
+    <div class="row">
+        <div class="col-lg-8 mx-auto">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1>新規投稿</h1>
+                <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary">
+                    <i class="fas fa-arrow-left"></i> 戻る
+                </a>
+            </div>
+            
+            {% if error %}
+            <div class="alert alert-danger">
+                {{ error }}
+            </div>
+            {% endif %}
+            
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('create_post') }}" class="needs-validation" novalidate>
+                        <div class="mb-3">
+                            <label for="title" class="form-label">タイトル</label>
+                            <input type="text" class="form-control" id="title" name="title" value="{{ request.form.title or '' }}" required>
+                            <div class="invalid-feedback">
+                                タイトルを入力してください
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="content" class="form-label">内容</label>
+                            <textarea class="form-control" id="content" name="content" rows="10" required>{{ request.form.content or '' }}</textarea>
+                            <div class="invalid-feedback">
+                                内容を入力してください
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="image" class="form-label">画像ファイル（任意）</label>
+                            <input class="form-control" type="file" id="image" name="image" accept="image/*">
+                            <div class="invalid-feedback">
+                                画像ファイルを選択してください
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="category" class="form-label">カテゴリ</label>
+                            <select class="form-select" id="category" name="category">
+                                <option value="" {% if not request.form.category %}selected{% endif %}>選択してください</option>
+                                {% for category in categories %}
+                                <option value="{{ category.id }}" {% if request.form.category|int == category.id %}selected{% endif %}>{{ category.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="mb-3 form-check">
+                            <input type="checkbox" class="form-check-input" id="published" name="published" value="1" {% if request.form.published %}checked{% endif %}>
+                            <label class="form-check-label" for="published">公開する</label>
+                        </div>
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save"></i> 保存する
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // テキストエリアの高さを自動調整
+    const textarea = document.getElementById('content');
+    if (textarea) {
+        textarea.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = (this.scrollHeight) + 'px';
+        });
+        // 初期表示時にも実行
+        textarea.dispatchEvent(new Event('input'));
+    }
+</script>
+{% endblock %}
+----------------------------------------------------------------------
+{% extends "layout.html" %}
+
+{% block title %}ダッシュボード{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>投稿一覧</h1>
+    <a href="{{ url_for('create_post') }}" class="btn btn-success">新規投稿</a>
+</div>
+
+{% if posts %}
+    <div class="row">
+        {% for post in posts %}
+            <div class="col-md-6 mb-4">
+                <div class="card h-100">
+
+                    {# ✅ 画像サムネイルを上部に表示（存在する場合） #}
+                    {% if post.image_filename %}
+                        <img src="{{ url_for('static', filename='uploads/' + post.image_filename) }}"
+                             class="card-img-top"
+                             style="max-height: 200px; object-fit: cover;">
+                    {% endif %}
+
+                    <div class="card-body">
+                        <h5 class="card-title">{{ post.title }}</h5>
+                        <p class="card-text text-muted">
+                            {% if post.created_at %}
+                                投稿日: {{ post.created_at.strftime('%Y年%m月%d日') }}
+                            {% endif %}
+                        </p>
+                        <p class="card-text">{{ post.body|truncate(100) }}</p>
+                    </div>
+
+                    <div class="card-footer bg-transparent d-flex justify-content-end">
+                        <a href="{{ url_for('edit_post', post_id=post.id) }}" class="btn btn-sm btn-outline-primary me-2">編集</a>
+                        <form action="{{ url_for('delete_post', post_id=post.id) }}" method="POST" onsubmit="return confirm('本当に削除しますか？');">
+                            <button type="submit" class="btn btn-sm btn-outline-danger">削除</button>
+                        </form>
+                    </div>
+
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+{% else %}
+    <div class="alert alert-info">
+        まだ投稿がありません。「新規投稿」ボタンから投稿を作成してください。
+    </div>
+{% endif %}
+{% endblock %}
+----------------------------------------------------------------------
+{% extends "layout.html" %}
+{% block title %}投稿の編集 - {{ post.title }}{% endblock %}
+{% block content %}
+<div class="container">
+    <div class="row">
+        <div class="col-lg-8 mx-auto">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1>投稿の編集</h1>
+                <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary">
+                    <i class="fas fa-arrow-left"></i> 戻る
+                </a>
+            </div>
+
+            <div class="text-muted">
+                {% if post.created_at %}
+                    <small>作成日: {{ post.created_at.strftime('%Y年%m月%d日 %H:%M') }}</small><br>
+                {% else %}
+                    <small>作成日: 未設定</small><br>
+                {% endif %}
+
+                {% if post.updated_at %}
+                    <small>更新日: {{ post.updated_at.strftime('%Y年%m月%d日 %H:%M') }}</small><br>
+                {% else %}
+                    <small>更新日: 未更新</small><br>
+                {% endif %}
+            </div>
+
+            {% if error %}
+            <div class="alert alert-danger">
+                {{ error }}
+            </div>
+            {% endif %}
+
+            <div class="card shadow-sm mt-3">
+                <div class="card-body">
+
+                    {# ✅ 現在の画像を表示 #}
+                    {% if post.image_filename %}
+                        <div class="mb-4">
+                            <label class="form-label">現在の画像:</label><br>
+                            <img src="{{ url_for('static', filename='uploads/' + post.image_filename) }}"
+                                 style="display: none;"
+                                 alt="投稿画像"
+                                class="post-image">
+                        </div>
+                    {% endif %}
+
+                    <form method="POST" action="{{ url_for('edit_post', post_id=post.id) }}"
+                          class="needs-validation" novalidate enctype="multipart/form-data">
+
+                        <div class="mb-3">
+                            <label for="title" class="form-label">タイトル</label>
+                            <input type="text" class="form-control" id="title" name="title"
+                                   value="{{ request.form.title or post.title }}" required>
+                            <div class="invalid-feedback">タイトルを入力してください</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="content" class="form-label">内容</label>
+                            <textarea class="form-control" id="content" name="content"
+                                      rows="10" required>{{ request.form.content or post.body }}</textarea>
+                            <div class="invalid-feedback">内容を入力してください</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="image" class="form-label">新しい画像を選択（任意）</label>
+                            <input class="form-control" type="file" id="image" name="image" accept="image/*">
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="category" class="form-label">カテゴリ</label>
+                            <select class="form-select" id="category" name="category">
+                                <option value="">選択してください</option>
+                                {% for category in categories %}
+                                    <option value="{{ category.id }}"
+                                      {% if (request.form.category and request.form.category|int == category.id)
+                                            or (not request.form.category and post.category_id == category.id) %}
+                                            selected
+                                      {% endif %}>
+                                      {{ category.name }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="mb-3 form-check">
+                            <input type="checkbox" class="form-check-input" id="published"
+                                   name="published" value="1"
+                                   {% if (request.form.published and request.form.published == '1')
+                                         or (request.form.published is not defined and post.published) %}
+                                         checked
+                                   {% endif %}>
+                            <label class="form-check-label" for="published">公開する</label>
+                        </div>
+
+                        <div>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save"></i> 更新する
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <div class="mt-4">
+                <div class="card border-danger">
+                    <div class="card-header bg-danger text-white">
+                        <h5 class="mb-0">危険ゾーン</h5>
+                    </div>
+                    <div class="card-body">
+                        <h5 class="card-title">この投稿を削除</h5>
+                        <p class="card-text">この操作は取り消せません。投稿を完全に削除します。</p>
+                        <form action="{{ url_for('delete_post', post_id=post.id) }}"
+                              method="POST"
+                              onsubmit="return confirm('本当にこの投稿を削除しますか？この操作は取り消せません。');">
+                            <button type="submit" class="btn btn-outline-danger">
+                                <i class="fas fa-trash-alt"></i> 投稿を削除
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const textarea = document.getElementById('content');
+    if (textarea) {
+        textarea.addEventListener('input', function () {
+            this.style.height = 'auto';
+            this.style.height = (this.scrollHeight) + 'px';
+        });
+        textarea.dispatchEvent(new Event('input'));
+    }
+</script>
+{% endblock %}
+----------------------------------------------------------------------
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}ブログアプリ{% endblock %}</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- カスタムCSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+
+  {% if post is defined and post.created_at %}
+    <p>created_at の中身: {{ post.created_at }}</p>
+  {% endif %}
+    
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container">
+            <a class="navbar-brand" href="{{ url_for('dashboard') }}">ブログアプリ</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-label="ナビゲーションを切り替え">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    {% if current_user.is_authenticated %}
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('dashboard') }}">ダッシュボード</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('create_post') }}">新規投稿</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('logout') }}">ログアウト</a>
+                        </li>
+                    {% else %}
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('login') }}">ログイン</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('register') }}">新規登録</a>
+                        </li>
+                    {% endif %}
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="alert alert-info alert-dismissible fade show">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="ナビゲーションを切り替え"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        {% block content %}{% endblock %}
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
+----------------------------------------------------------------------
+{% extends "layout.html" %}
+
+{% block title %}ログイン{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h2 class="mb-0">ログイン</h2>
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    <div class="mb-3">
+                        <label for="email" class="form-label">メールアドレス</label>
+                        <input type="email" class="form-control" id="email" name="email" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="password" class="form-label">パスワード</label>
+                        <input type="password" class="form-control" id="password" name="password" required>
+                    </div>
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary">ログイン</button>
+                    </div>
+                </form>
+                <p class="mt-3 text-center">
+                    アカウントをお持ちでない場合は<a href="{{ url_for('register') }}">新規登録</a>してください。
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+----------------------------------------------------------------------<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Register</title>
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <h2 class="mt-5">ユーザー登録</h2>
+        <form action="/register" method="post">
+            <div class="form-group">
+                <label for="username">ユーザ名</label>
+                <input type="text" class="form-control" id="username" name="username" required>
+            </div>
+            <div class="form-group">
+                <label for="name">投稿者名</label>
+                <input type="text" class="form-control" id="name" name="name" required>
+            </div>
+            <div class="form-group">
+                <label for="role">権限</label>
+                <select class="form-control" id="role" name="role" required>
+                    <option value="admin">管理者</option>
+                    <option value="poster">投稿者</option>
+                </select>
+            </div>            
+            <div class="form-group">
+                <label for="email">メールアドレス</label>
+                <input type="email" class="form-control" id="email" name="email" required>
+            </div>
+            <div class="form-group">
+                <label for="password">パスワード</label>
+                <input type="password" class="form-control" id="password" name="password" required>
+            </div>
+            <button type="submit" class="btn btn-primary">登録</button>
+        </form>
+    </div>
+</body>
+</html>
+----------------------------------------------------------------------
+{% extends "layout.html" %}
+{% block title %}{{ post.title }}{% endblock %}
+{% block content %}
+<div class="container">
+    <div class="row">
+        <div class="col-lg-8 mx-auto">
+            <nav aria-label="breadcrumb" class="mb-4">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{{ url_for('index') }}">ホーム</a></li>
+                    {% if post.category %}
+                    <li class="breadcrumb-item"><a href="{{ url_for('category', category_id=post.category.id) }}">{{ post.category.name }}</a></li>
+                    {% endif %}
+                    <li class="breadcrumb-item active" aria-current="page">{{ post.title }}</li>
+                </ol>
+            </nav>
+            
+            <article class="blog-post">
+                <header class="mb-4">
+                    <h1 class="display-5 fw-bold">{{ post.title }}</h1>
+                    <div class="text-muted mb-2">
+                        <span><i class="far fa-calendar-alt"></i> {{ post.created_at.strftime('%Y年%m月%d日') }}</span>
+                        {% if post.category %}
+                        <span class="ms-3"><i class="fas fa-folder"></i> <a href="{{ url_for('category', category_id=post.category.id) }}" class="text-decoration-none">{{ post.category.name }}</a></span>
+                        {% endif %}
+                        {% if current_user.is_authenticated %}
+                        <span class="ms-3"><a href="{{ url_for('edit_post', post_id=post.id) }}" class="text-decoration-none"><i class="fas fa-edit"></i> 編集</a></span>
+                        {% endif %}
+                    </div>
+                </header>
+                
+                {% if post.image %}
+                <div class="mb-4">
+                    <img src="{{ url_for('static', filename='uploads/' + post.image) }}" class="img-fluid rounded" alt="{{ post.title }}">
+                </div>
+                {% endif %}
+                
+                <div class="blog-content">
+                    {{ post.body|safe }}
+                </div>
+                
+                <footer class="my-5">
+                    <div class="border-top border-bottom py-3">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                {% if post.tags %}
+                                <div class="tags">
+                                    <i class="fas fa-tags"></i>
+                                    {% for tag in post.tags %}
+                                    <a href="{{ url_for('tag', tag_id=tag.id) }}" class="badge bg-secondary text-decoration-none">{{ tag.name }}</a>
+                                    {% endfor %}
+                                </div>
+                                {% endif %}
+                            </div>
+                            <div class="share-buttons">
+                                <span>シェア:</span>
+                                <a href="https://twitter.com/intent/tweet?url={{ request.url|urlencode }}&text={{ post.title|urlencode }}" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline-primary">
+                                    <i class="fab fa-twitter"></i>
+                                </a>
+                                <a href="https://www.facebook.com/sharer/sharer.php?u={{ request.url|urlencode }}" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline-primary">
+                                    <i class="fab fa-facebook-f"></i>
+                                </a>
+                                <a href="https://www.linkedin.com/sharing/share-offsite/?url={{ request.url|urlencode }}" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline-primary">
+                                    <i class="fab fa-linkedin-in"></i>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </footer>
+            </article>
+            
+            {% if related_posts %}
+            <div class="related-posts mb-5">
+                <h3 class="mb-4">関連記事</h3>
+                <div class="row">
+                    {% for related_post in related_posts %}
+                    <div class="col-md-6 mb-4">
+                        <div class="card h-100">
+                            {% if related_post.image %}
+                            <img src="{{ url_for('static', filename='uploads/' + related_post.image) }}" class="card-img-top" alt="{{ related_post.title }}">
+                            {% endif %}
+                            <div class="card-body">
+                                <h5 class="card-title">{{ related_post.title }}</h5>
+                                <p class="card-text text-muted">{{ related_post.created_at.strftime('%Y年%m月%d日') }}</p>
+                                <a href="{{ url_for('view_post', post_id=related_post.id) }}" class="btn btn-sm btn-outline-primary">続きを読む</a>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+            
+            {% if comments_enabled %}
+            <div class="comments-section mb-5">
+                <h3 class="mb-4">コメント</h3>
+                {% if comments %}
+                <div class="comments-list">
+                    {% for comment in comments %}
+                    <div class="comment mb-4 p-3 border rounded">
+                        <div class="d-flex justify-content-between">
+                            <div class="comment-meta">
+                                <strong>{{ comment.name }}</strong>
+                                <span class="text-muted ms-2">{{ comment.created_at.strftime('%Y年%m月%d日 %H:%M') }}</span>
+                            </div>
+                            {% if current_user.is_authenticated %}
+                            <div>
+                                <form action="{{ url_for('delete_comment', comment_id=comment.id) }}" method="POST" class="d-inline">
+                                    <button type="submit" class="btn btn-sm btn-link text-danger p-0" onclick="return confirm('このコメントを削除しますか？');">
+                                        <i class="fas fa-trash-alt"></i>
+                                    </button>
+                                </form>
+                            </div>
+                            {% endif %}
+                        </div>
+                        <div class="comment-content mt-2">
+                            {{ comment.content }}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p>コメントはまだありません。</p>
+                {% endif %}
+                
+                <div class="comment-form mt-4">
+                    <h4>コメントを残す</h4>
+                    <form method="POST" action="{{ url_for('add_comment', post_id=post.id) }}" class="needs-validation" novalidate>
+                        <div class="mb-3">
+                            <label for="name" class="form-label">お名前</label>
+                            <input type="text" class="form-control" id="name" name="name" required>
+                            <div class="invalid-feedback">
+                                お名前を入力してください
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="email" class="form-label">メールアドレス（非公開）</label>
+                            <input type="email" class="form-control" id="email" name="email" required>
+                            <div class="invalid-feedback">
+                                有効なメールアドレスを入力してください
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="comment" class="form-label">コメント</label>
+                            <textarea class="form-control" id="comment" name="content" rows="4" required></textarea>
+                            <div class="invalid-feedback">
+                                コメントを入力してください
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-primary">コメントを投稿</button>
+                    </form>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+----------------------------------------------------------------------

@@ -1,0 +1,171 @@
+{# F:\dev\BrogDev\app\admin\templates\manage_images.html #}
+
+{% extends "base.html" %}
+
+{% block title %}画像管理{% endblock %} {# ページのタイトルを明確に #}
+
+{% block content %}
+<div class="container mt-4">
+    <h1 class="mb-4"><i class="fas fa-images me-2"></i> 画像管理</h1> {# アイコンを追加し、見出しを明確に #}
+    <p class="lead">アップロードされた画像の一覧を表示し、管理します。</p> {# ページの説明を追加 #}
+
+    {# フラッシュメッセージの表示 #}
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="閉じる"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <div class="mb-3 d-flex flex-wrap gap-2"> {# ボタンを柔軟に配置するため flexbox を利用 #}
+        {# 画像アップロードへのリンク #}
+        <a href="{{ url_for('uploads.show_upload_single_form') }}" class="btn btn-primary"><i class="fas fa-upload me-2"></i> 単一画像をアップロード</a>
+        <a href="{{ url_for('uploads.show_bulk_upload_form') }}" class="btn btn-success"><i class="fas fa-cloud-upload-alt me-2"></i> 一括アップロード</a>
+    </div>
+
+    <div class="row row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-lg-4 g-4" id="imageGrid">
+        {% if images %}
+            {% for image in images %}
+            <div class="col">
+                <div class="card h-100 shadow-sm">
+                    {# サムネイル画像を表示 #}
+                    {# image.thumbnail_url は routes.py で url_for('static', ...) で生成されているため、直接使用できます #}
+                    <img src="{{ image.thumbnail_url or image.url }}" class="card-img-top img-fluid rounded" 
+                         alt="{{ image.alt_text or image.original_filename }}" 
+                         style="max-height: 200px; object-fit: cover;">
+                    
+                    <div class="card-body p-2"> {# ここが重要: card-body が適切に閉じられているか確認 #}
+                        <p class="card-title text-truncate fw-bold mb-1">{{ image.original_filename }}</p> 
+                        <p class="card-text"><small class="text-muted">ID: {{ image.id }}</small></p>
+                        <p class="card-text"><small class="text-muted">アップロード日時: {{ image.uploaded_at.strftime('%Y-%m-%d %H:%M') }}</small></p>
+                        <p class="card-text"><small class="text-muted">アップロードユーザー: {{ image.uploader.username if image.uploader else 'N/A' }}</small></p>
+
+                        <div class="d-flex flex-wrap gap-2 mt-2"> {# ボタンを柔軟に配置するため flexbox を利用 #}
+                            <button type="button" class="btn btn-sm btn-info copy-image-url flex-grow-1"
+                                data-image-url="{{ image.url }}"> 
+                                <i class="fas fa-copy me-1"></i> URLコピー
+                            </button>
+                            <button type="button" class="btn btn-sm btn-success insert-markdown flex-grow-1"
+                                data-image-url="{{ image.url }}" 
+                                data-alt-text="{{ image.alt_text if image.alt_text else image.original_filename }}">
+                                <i class="fas fa-code me-1"></i> Markdown挿入
+                            </button>
+                            <form action="{{ url_for('uploads.delete_image', image_id=image.id) }}" method="POST" class="d-inline flex-grow-1" onsubmit="return confirm('本当にこの画像を削除しますか？');"> 
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"> 
+                                <button type="submit" class="btn btn-sm btn-danger w-100"><i class="fas fa-trash-alt me-1"></i> 削除</button>
+                            </form>
+                        </div>
+                    </div> {# /card-body #}
+                </div> {# /card #}
+            </div> {# /col #}
+            {% endfor %}
+        {% else %}
+            <p class="text-muted col-12 text-center">まだ画像がアップロードされていません。</p>
+        {% endif %}
+    </div> {# /row #}
+</div> {# /container #}
+{% endblock %}
+
+{% block scripts_extra %} {# JavaScriptを scripts_extra ブロック内に移動 #}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // URLコピー機能
+        document.querySelectorAll('.copy-image-url').forEach(button => {
+            button.addEventListener('click', function() {
+                const imageUrl = this.dataset.imageUrl;
+                // document.execCommand('copy') は非推奨ですが、iframe環境での互換性のために使用されることがあります。
+                // 現代のブラウザでは navigator.clipboard.writeText が推奨されます。
+                // Canvas環境で navigator.clipboard.writeText が動作しない場合があるため、
+                // 動作しない場合はユーザーに手動コピーを促すか、execCommandを検討してください。
+                navigator.clipboard.writeText(imageUrl).then(() => {
+                    // alert('画像URLをクリップボードにコピーしました！'); // alertは非推奨のためコメントアウト
+                    // 代わりにメッセージボックス表示
+                    const messageBox = document.createElement('div');
+                    messageBox.className = 'alert alert-success alert-dismissible fade show position-fixed top-0 start-50 translate-middle-x mt-3';
+                    messageBox.style.zIndex = 1050;
+                    messageBox.innerHTML = `
+                        画像URLをクリップボードにコピーしました！
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="閉じる"></button>
+                    `;
+                    document.body.appendChild(messageBox);
+                    setTimeout(() => new bootstrap.Alert(messageBox).close(), 3000);
+                }).catch(err => {
+                    console.error('URLのコピーに失敗しました', err);
+                    // alert('URLのコピーに失敗しました。ブラウザのコンソールを確認してください。'); // alertは非推奨のためコメントアウト
+                    const messageBox = document.createElement('div');
+                    messageBox.className = 'alert alert-danger alert-dismissible fade show position-fixed top-0 start-50 translate-middle-x mt-3';
+                    messageBox.style.zIndex = 1050;
+                    messageBox.innerHTML = `
+                        URLのコピーに失敗しました。ブラウザのコンソールを確認してください。
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="閉じる"></button>
+                    `;
+                    document.body.appendChild(messageBox);
+                    setTimeout(() => new bootstrap.Alert(messageBox).close(), 5000);
+                });
+            });
+        });
+
+        // Markdown挿入機能
+        document.querySelectorAll('.insert-markdown').forEach(button => {
+            button.addEventListener('click', function() {
+                const imageUrl = this.dataset.imageUrl;
+                const altText = this.dataset.altText;
+
+                // 親ウィンドウ (投稿エディタがあるページ) にメッセージを送信
+                // ★★★ここを実際のアプリケーションのオリジンに設定してください。例: 'http://127.0.0.1:5000' ★★★
+                const targetOrigin = 'http://127.0.0.1:5000'; 
+
+                if (window.parent) {
+                    window.parent.postMessage({
+                        type: 'insertImage',
+                        url: imageUrl,
+                        altText: altText
+                    }, targetOrigin); 
+                    // alert('画像をエディタに挿入するメッセージを送信しました。'); // alertは非推奨のためコメントアウト
+                    const messageBox = document.createElement('div');
+                    messageBox.className = 'alert alert-info alert-dismissible fade show position-fixed top-0 start-50 translate-middle-x mt-3';
+                    messageBox.style.zIndex = 1050;
+                    messageBox.innerHTML = `
+                        画像をエディタに挿入するメッセージを送信しました。
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="閉じる"></button>
+                    `;
+                    document.body.appendChild(messageBox);
+                    setTimeout(() => new bootstrap.Alert(messageBox).close(), 3000);
+
+                } else {
+                    // iframe で開かれていない場合や、連携できない場合のフォールバック
+                    const markdown = `![${altText}](${imageUrl})`;
+                    navigator.clipboard.writeText(markdown).then(() => {
+                        // alert(`Markdown形式をクリップボードにコピーしました:\n\n${markdown}\n\n※エディタに手動で貼り付けてください。`); // alertは非推奨のためコメントアウト
+                        const messageBox = document.createElement('div');
+                        messageBox.className = 'alert alert-warning alert-dismissible fade show position-fixed top-0 start-50 translate-middle-x mt-3';
+                        messageBox.style.zIndex = 1050;
+                        messageBox.innerHTML = `
+                            Markdown形式をクリップボードにコピーしました:<br><br>${markdown}<br><br>※エディタに手動で貼り付けてください。
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="閉じる"></button>
+                        `;
+                        document.body.appendChild(messageBox);
+                        setTimeout(() => new bootstrap.Alert(messageBox).close(), 8000);
+                    }).catch(err => {
+                        console.error('Markdownのコピーに失敗しました', err);
+                        // alert('Markdownのコピーに失敗しました。ブラウザのコンソールを確認してください。'); // alertは非推奨のためコメントアウト
+                        const messageBox = document.createElement('div');
+                        messageBox.className = 'alert alert-danger alert-dismissible fade show position-fixed top-0 start-50 translate-middle-x mt-3';
+                        messageBox.style.zIndex = 1050;
+                        messageBox.innerHTML = `
+                            Markdownのコピーに失敗しました。ブラウザのコンソールを確認してください。
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="閉じる"></button>
+                        `;
+                        document.body.appendChild(messageBox);
+                        setTimeout(() => new bootstrap.Alert(messageBox).close(), 5000);
+                    });
+                }
+            });
+        });
+    });
+</script>
+{% endblock %}

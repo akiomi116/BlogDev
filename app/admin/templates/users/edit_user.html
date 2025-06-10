@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+
+{% block title %}ユーザー編集 - 管理パネル{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>ユーザー: {{ user.username }} を編集</h2>
+    <hr>
+    <form method="POST">
+        {{ form.hidden_tag() }} {# CSRF トークン #}
+
+        <div class="mb-3">
+            {{ form.username.label(class="form-label") }}
+            {# ユーザー名を事前に埋める #}
+            {{ form.username(class="form-control", value=user.username) }} 
+            {% if form.username.errors %}
+                {% for error in form.username.errors %}
+                    <div class="text-danger">{{ error }}</div>
+                {% endfor %}
+            {% endif %}
+        </div>
+
+        <div class="mb-3">
+            {{ form.email.label(class="form-label") }}
+            {# メールアドレスを事前に埋める #}
+            {{ form.email(class="form-control", value=user.email) }} 
+            {% if form.email.errors %}
+                {% for error in form.email.errors %}
+                    <div class="text-danger">{{ error }}</div>
+                {% endfor %}
+            {% endif %}
+        </div>
+
+        {# パスワードフィールドは編集時にオプションです。ユーザーが変更したい場合のみ表示します #}
+        <div class="mb-3">
+            {{ form.password.label(class="form-label") }}
+            {{ form.password(class="form-control", placeholder="変更しない場合は空のまま") }}
+            {% if form.password.errors %}
+                {% for error in form.password.errors %}
+                    <div class="text-danger">{{ error }}</div>
+                {% endfor %}
+            {% endif %}
+        </div>
+
+        <div class="mb-3">
+            {{ form.confirm_password.label(class="form-label") }}
+            {{ form.confirm_password(class="form-control", placeholder="変更しない場合は空のまま") }}
+            {% if form.confirm_password.errors %}
+                {% for error in form.confirm_password.errors %}
+                    <div class="text-danger">{{ error }}</div>
+                {% endfor %}
+            {% endif %}
+        </div>
+
+        <div class="mb-3">
+            {{ form.role.label(class="form-label") }}
+            {# ロールは routes.py で obj=user を使って事前に選択されます #}
+            {{ form.role(class="form-select") }} 
+            {% if form.role.errors %}
+                {% for error in form.role.errors %}
+                    <div class="text-danger">{{ error }}</div>
+                {% endfor %}
+            {% endif %}
+        </div>
+
+        <button type="submit" class="btn btn-primary">ユーザー更新</button>
+        <a href="{{ url_for('admin.manage_users') }}" class="btn btn-secondary">キャンセル</a>
+    </form>
+</div>
+{% endblock %}

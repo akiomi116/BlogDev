@@ -1,0 +1,53 @@
+{# templates/tags/list_tags.html #}
+{% extends "base.html" %}
+{% block title %}タグ一覧{% endblock %}
+{% block content %}
+<div class="container mt-4">
+    <h1 class="mb-4">タグ一覧</h1>
+
+    {# フラッシュメッセージの表示 #}
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            <div class="mb-4">
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="閉じる"></button>
+                    </div>
+                {% endfor %}
+            </div>
+        {% endif %}
+    {% endwith %}
+
+    <div class="mb-3">
+        <a href="{{ url_for('tags.new_tag') }}" class="btn btn-primary">
+            <i class="fas fa-plus"></i> 新しいタグを追加
+        </a>
+    </div>
+
+    {% if tags %}
+        <ul class="list-group">
+            {% for tag in tags %}
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    <span>{{ tag.name }}</span>
+                    <div class="btn-group btn-group-sm" role="group">
+                        <a href="{{ url_for('home.posts_by_tag', tag_id=tag.id) }}" class="btn btn-info">
+                            <i class="fas fa-eye"></i> 詳細 
+                        </a>
+                        <a href="{{ url_for('tags.edit_tag', tag_id=tag.id) }}" class="btn btn-secondary">
+                            <i class="fas fa-edit"></i> 編集 
+                        </a>
+                        <form action="{{ url_for('tags.delete_tag', tag_id=tag.id) }}" method="POST" onsubmit="return confirm('本当にこのタグを削除しますか？関連する投稿からタグが削除されます。');" class="d-inline">
+                            <button type="submit" class="btn btn-danger">
+                                <i class="fas fa-trash-alt"></i> 削除 
+                            </button>
+                        </form>
+                    </div>
+                </li>
+            {% endfor %}
+        </ul>
+    {% else %}
+        <p class="text-muted">まだタグが登録されていません。</p>
+    {% endif %}
+</div>
+{% endblock %}

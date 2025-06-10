@@ -1,0 +1,44 @@
+{# F:\dev\BrogDev\app\admin\templates\upload_single_image.html #}
+
+{% extends "base.html" %}
+
+{% block title %}単一画像アップロード{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1 class="mb-4"><i class="fas fa-upload me-2"></i> 単一画像アップロード</h1>
+    <p class="lead">新しい画像ファイルを1つアップロードします。</p>
+
+    {# フラッシュメッセージの表示 #}
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="閉じる"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <div class="card p-4 shadow-sm">
+        <form method="POST" enctype="multipart/form-data">
+            {{ form.csrf_token }} {# CSRFトークンは自動的に隠しフィールドとして挿入されます #}
+
+            <div class="mb-3">
+                {{ form.image_file.label(class="form-label") }}
+                {{ form.image_file(class="form-control") }}
+                {% if form.image_file.errors %}
+                    <div class="text-danger">
+                        {% for error in form.image_file.errors %}{{ error }}{% endfor %}
+                    </div>
+                {% endif %}
+                <small class="form-text text-muted">JPG, JPEG, PNG, GIF形式の画像ファイルを1つ選択してください。</small>
+            </div>
+
+            {{ form.submit(class="btn btn-primary") }}
+            <a href="{{ url_for('uploads.manage_images') }}" class="btn btn-secondary ms-2">画像管理へ戻る</a>
+        </form>
+    </div>
+</div>
+{% endblock %}

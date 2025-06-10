@@ -1,0 +1,49 @@
+{# templates/categories/new_category.html #}
+{% extends "base.html" %}
+{% block title %}新しいカテゴリを作成{% endblock %}
+{% block content %}
+<div class="container mt-4">
+    <h2>{{ title }}</h2>
+    <form method="POST" action="{{ url_for('categories.new_category') }}">
+        {{ form.csrf_token }}
+        <div class="mb-3">
+            {{ form.name.label(class="form-label") }}
+            {{ form.name(class="form-control", placeholder="新しいカテゴリ名") }}
+            {% if form.name.errors %}
+                <div class="text-danger">
+                    {% for error in form.name.errors %}
+                        <span>{{ error }}</span>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        </div>
+        <div class="mb-3">
+            {{ form.slug.label(class="form-label") }}
+            {{ form.slug(class="form-control", placeholder="URL用スラッグ（自動生成されます）") }}
+            {% if form.slug.errors %}
+                <div class="text-danger">
+                    {% for error in form.slug.errors %}
+                        <span>{{ error }}</span>
+                    {% endfor %}
+                </div>
+            {% endif %}
+            <div class="form-text">空白の場合、カテゴリ名から自動生成されます</div>
+        </div>
+        <div class="mb-3">
+            {{ form.description.label(class="form-label") }}
+            {{ form.description(class="form-control", rows="3", placeholder="カテゴリの説明（任意）") }}
+            {% if form.description.errors %}
+                <div class="text-danger">
+                    {% for error in form.description.errors %}
+                        <span>{{ error }}</span>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        </div>
+        <div class="mb-3">
+            {{ form.submit(class="btn btn-primary") }}
+            <a href="{{ url_for('categories.list_categories') }}" class="btn btn-secondary">キャンセル</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

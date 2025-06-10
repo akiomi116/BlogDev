@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}画像一括アップロード{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1 class="mb-4">画像一括アップロード</h1>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="閉じる"></button>
+          </div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    <form method="POST" enctype="multipart/form-data" action="{{ url_for('uploads.bulk_upload') }}">
+        <div class="mb-3">
+            <label for="images" class="form-label">画像ファイル（複数可）</label>
+            <input class="form-control" type="file" id="images" name="images" multiple accept="image/*" required>
+            <small class="text-muted">CtrlまたはShiftを押しながら複数選択できます。</small>
+        </div>
+
+        <button type="submit" class="btn btn-primary">アップロード</button>
+        <a href="{{ url_for('home.dashboard') }}" class="btn btn-secondary ms-2">戻る</a>
+    </form>
+</div>
+{% endblock %}

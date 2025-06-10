@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+
+{% block title %}新しいタグを作成{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>新しいタグを作成</h2>
+    <hr>
+    <form method="POST">
+        {{ form.csrf_token }}
+        <div class="mb-3">
+            {{ form.name.label(class="form-label") }}
+            {{ form.name(class="form-control") }}
+            {% if form.name.errors %}
+                <div class="text-danger">
+                    {% for error in form.name.errors %}
+                        <span>{{ error }}</span>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        </div>
+        <button type="submit" class="btn btn-primary">作成</button>
+        <a href="{{ url_for('admin.manage_tags') }}" class="btn btn-secondary">キャンセル</a>
+    </form>
+</div>
+{% endblock %}

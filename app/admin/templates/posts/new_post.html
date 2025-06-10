@@ -1,0 +1,288 @@
+{# F:\dev\BrogDev\app\admin\templates\posts\new_post.html #}
+
+{% extends "base.html" %}
+
+{% block title %}新規投稿作成{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1 class="mb-4">新規投稿作成</h1>
+
+    {# フラッシュメッセージの表示 #}
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="閉じる"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    {# action属性を追加して明示的にURLを指定 #}
+    <form method="POST" action="{{ url_for('blog_admin_bp.new_post') }}" enctype="multipart/form-data" id="newPostForm">
+        {{ form.csrf_token }}
+
+        <div class="mb-3">
+            {{ form.title.label(class="form-label") }}
+            {{ form.title(class="form-control") }}
+            {% if form.title.errors %}
+                <div class="text-danger">
+                    {% for error in form.title.errors %}{{ error }}{% endfor %}
+                </div>
+            {% endif %}
+        </div>
+
+        <div class="mb-3">
+            {{ form.body.label(class="form-label") }}
+            {{ form.body(class="form-control", rows=10) }}
+            {% if form.body.errors %}
+                <div class="text-danger">
+                    {% for error in form.body.errors %}{{ error }}{% endfor %}
+                </div>
+            {% endif %}
+        </div>
+
+        <div class="mb-3">
+            {{ form.category.label(class="form-label") }}
+            {{ form.category(class="form-select") }}
+            {% if form.category.errors %}
+                <div class="text-danger">
+                    {% for error in form.category.errors %}{{ error }}{% endfor %}
+                </div>
+            {% endif %}
+            <small class="form-text text-muted">カテゴリを選択してください。</small>
+        </div>
+
+        <div class="mb-3">
+            {{ form.tags.label(class="form-label") }}
+            {{ form.tags(class="form-control") }}
+            {% if form.tags.errors %}
+                <div class="text-danger">
+                    {% for error in form.tags.errors %}{{ error }}{% endfor %}
+                </div>
+            {% endif %}
+            <small class="form-text text-muted">タグはCtrl/Cmdキーで複数選択できます。</small>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">メイン画像:</label>
+            <div id="selectedImagePreview" class="mb-2" style="display: none;">
+                <img src="" alt="Selected Image" class="img-fluid rounded" style="max-width: 200px; height: auto;">
+                <p class="text-muted small mt-1"><span id="selectedImageFilename"></span></p>
+                <button type="button" class="btn btn-sm btn-outline-danger mt-1" id="clearSelectedImage">選択を解除</button>
+            </div>
+
+            {# form.main_image_id を直接出力。これはWTFormsで追加したHiddenFieldに対応 #}
+            {{ form.main_image() }} 
+
+            <div class="d-flex align-items-center mb-2">
+                {{ form.main_image_file.label(class="form-label mb-0 me-2") }}
+                {{ form.main_image_file(class="form-control w-auto") }}
+                <button type="button" class="btn btn-outline-secondary ms-2" data-bs-toggle="modal" data-bs-target="#imageGalleryModal" id="openImageGallery">ギャラリーから選択</button>
+            </div>
+            {% if form.main_image_file.errors %}
+                <div class="text-danger">
+                    {% for error in form.main_image_file.errors %}{{ error }}{% endfor %}
+                </div>
+            {% endif %}
+            <small class="form-text text-muted">ファイルをアップロードするか、ギャラリーから既存の画像を選択してください。両方選択された場合は、アップロードされたファイルが優先されます。</small>
+        </div>
+
+        <div class="form-check mb-3">
+            {{ form.is_published(class="form-check-input") }}
+            {{ form.is_published.label(class="form-check-label") }}
+            <small class="form-text text-muted">チェックを入れると投稿が公開されます。</small>
+        </div>
+
+        {{ form.submit(class="btn btn-primary") }}
+        <a href="{{ url_for('blog_admin_bp.list_posts') }}" class="btn btn-secondary">キャンセル</a> {# posts.list_posts は admin.posts に修正 #}
+    </form>
+</div>
+
+{# 画像ギャラリーモーダル - 変更なし #}
+<div class="modal fade" id="imageGalleryModal" tabindex="-1" aria-labelledby="imageGalleryModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable"> 
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="imageGalleryModalLabel">画像ギャラリー</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="閉じる"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-lg-4 g-4" id="imageGalleryGrid">
+                    <div class="col text-center" id="loadingImages">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p class="mt-2 text-muted">画像をロード中...</p>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">閉じる</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts_extra %}
+{{ super() }}
+{# ★修正: Bootstrap JS CDNのintegrity属性から'x'を削除★ #}
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js" integrity="sha384-geWF76RCwLtnZ8qwWowPQNguL3RmwHVBC9FhGdlKrxdiJJigF/h/6tIed9Ltxm+" crossorigin="anonymous"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const newPostForm = document.getElementById('newPostForm');
+    const selectedImagePreview = document.getElementById('selectedImagePreview');
+    const selectedImageElement = selectedImagePreview.querySelector('img');
+    const selectedImageFilenameElement = document.getElementById('selectedImageFilename');
+    // Flaskフォームのform.main_image_idに対応
+    const mainImageIdInput = document.getElementById('main_image'); 
+    const mainImageFileInput = document.getElementById('main_image_file');
+    const clearSelectedImageButton = document.getElementById('clearSelectedImage');
+    const imageGalleryModalElement = document.getElementById('imageGalleryModal'); 
+    const imageGalleryModal = new bootstrap.Modal(imageGalleryModalElement);
+    const imageGalleryGrid = document.getElementById('imageGalleryGrid');
+    const loadingImagesSpinner = document.getElementById('loadingImages');
+
+    let imagesLoaded = false; 
+
+    // モーダルが開かれるときに画像をロード
+    imageGalleryModalElement.addEventListener('show.bs.modal', function () {
+        if (!imagesLoaded) {
+            loadingImagesSpinner.style.display = 'block'; 
+            imageGalleryGrid.innerHTML = ''; // 以前のコンテンツをクリア
+
+            fetch('/admin/uploads/images/json') // 画像ギャラリーAPIのエンドポイント
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('画像のロードに失敗しました。');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    loadingImagesSpinner.style.display = 'none'; 
+                    if (data.images && data.images.length > 0) {
+                        data.images.forEach(image => {
+                            const colDiv = document.createElement('div');
+                            colDiv.classList.add('col');
+                            colDiv.innerHTML = `
+                                <div class="card h-100 image-card cursor-pointer" data-image-id="${image.id}" data-image-url="${image.url}" data-thumbnail-url="${image.thumbnail_url || image.url}" data-filename="${image.original_filename || image.unique_filename}">
+                                    <img src="${image.thumbnail_url || image.url}" class="card-img-top img-fluid rounded" alt="${image.original_filename}">
+                                    <div class="card-body p-2">
+                                        <p class="card-text text-truncate small">${image.original_filename || image.unique_filename}</p>
+                                    </div>
+                                </div>
+                            `;
+                            imageGalleryGrid.appendChild(colDiv);
+                        });
+                        imagesLoaded = true; 
+                    } else {
+                        imageGalleryGrid.innerHTML = '<p class="text-muted text-center col-12">利用可能な画像がありません。</p>';
+                    }
+                })
+                .catch(error => {
+                    loadingImagesSpinner.style.display = 'none'; 
+                    imageGalleryGrid.innerHTML = `<p class="text-danger text-center col-12">エラー: ${error.message}</p>`;
+                    console.error('Error loading images:', error);
+                });
+        }
+    });
+
+    // ギャラリー内の画像カードがクリックされた時の処理
+    imageGalleryGrid.addEventListener('click', function(event) {
+        const imageCard = event.target.closest('.image-card');
+        if (imageCard) {
+            const imageId = imageCard.dataset.imageId;
+            const imageUrl = imageCard.dataset.imageUrl; // 使用されていませんが、将来的に必要になるかも
+            const thumbnail_url = imageCard.dataset.thumbnailUrl;
+            const filename = imageCard.dataset.filename;
+
+            // ギャラリーから画像が選択されたら、隠しフィールドにIDを設定
+            selectedImageIdInput.value = imageId;
+
+            // プレビュー表示を更新
+            selectedImageElement.src = thumbnail_url;
+            selectedImageElement.alt = filename;
+            selectedImageFilenameElement.textContent = filename;
+            selectedImagePreview.style.display = 'block';
+
+            // 新しい画像アップロードフィールドをクリア
+            mainImageFileInput.value = '';
+
+            // モーダルを閉じる
+            imageGalleryModal.hide(); 
+        }
+    });
+
+    // モーダルが完全に閉じられた後に残るbackdropを削除する
+    imageGalleryModalElement.addEventListener('hidden.bs.modal', function () {
+        setTimeout(() => {
+            const backdrops = document.querySelectorAll('.modal-backdrop');
+            backdrops.forEach(backdrop => backdrop.remove());
+            document.body.classList.remove('modal-open'); 
+            document.body.style.overflow = ''; 
+        }, 300); 
+    });
+
+    // 選択解除ボタンがクリックされた時の処理
+    clearSelectedImageButton.addEventListener('click', function() {
+        selectedImageIdInput.value = ''; // 隠しフィールドをクリア
+        selectedImagePreview.style.display = 'none'; // プレビューを非表示
+        selectedImageElement.src = '';
+        selectedImageFilenameElement.textContent = '';
+        mainImageFileInput.value = ''; // ファイルアップロードもクリア
+    });
+
+    // 新しい画像をアップロードするFileFieldが変更された時の処理
+    mainImageFileInput.addEventListener('change', function() {
+        if (this.value) { // ファイルが選択されたら
+            selectedImageIdInput.value = ''; // 既存画像選択をクリア
+            selectedImagePreview.style.display = 'none'; // プレビューを非表示
+            selectedImageElement.src = '';
+            selectedImageFilenameElement.textContent = '';
+        }
+    });
+
+    // フォーム送信時の最終チェック（JavaScriptが最終的に送信する値を制御）
+    // アップロードとギャラリー選択が両方ある場合、アップロードを優先するため、
+    // ここでselected_image_idをクリアする
+    newPostForm.addEventListener('submit', function(event) {
+        if (mainImageFileInput.value && selectedImageIdInput.value) {
+            selectedImageIdInput.value = ''; // アップロードがあるならギャラリー選択は無視
+            // プレビュー表示もクリアする（ユーザーに見える挙動として）
+            selectedImagePreview.style.display = 'none';
+        }
+    });
+
+    // ページロード時に既存の選択があればプレビューを表示 (編集ページ用)
+    // new_post.htmlでは不要ですが、edit_post.htmlで必要になります
+    {% if post and post.main_image %}
+    if ('{{ post.main_image.id }}') {
+        selectedImageIdInput.value = '{{ post.main_image.id }}';
+        selectedImageElement.src = '{{ post.main_image.path }}'; // または thumbnail_path
+        selectedImageElement.alt = '{{ post.main_image.filename }}';
+        selectedImageFilenameElement.textContent = '{{ post.main_image.filename }}';
+        selectedImagePreview.style.display = 'block';
+    }
+    {% endif %}
+
+});
+</script>
+<style>
+    .image-card {
+        transition: transform 0.2s ease-in-out;
+        cursor: pointer;
+    }
+    .image-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15) !important;
+    }
+    .image-card img {
+        height: 150px; 
+        object-fit: cover;
+    }
+</style>
+{% endblock %}

@@ -1,0 +1,111 @@
+• users テーブル (ユーザー情報)
+	• user_id: INT, 主キー, 自動連番 (ユーザーを一意に識別)
+	• username: VARCHAR(50), NOT NULL, UNIQUE (ログインID)
+	• password_hash: VARCHAR(255), NOT NULL (パスワードのハッシュ値)
+	• email: VARCHAR(255), UNIQUE (メールアドレス, オプション)
+	• created_at: DATETIME, NOT NULL, DEFAULT CURRENT_TIMESTAMP (登録日時)
+	• role: VARCHAR(20), NOT NULL, DEFAULT 'author' (ユーザーの役割)
+
+・categories テーブル (カテゴリ情報)
+	• category_id: INT, 主キー, 自動連番 (カテゴリを一意に識別)
+	• name: VARCHAR(100), NOT NULL, UNIQUE (カテゴリ名)
+	• slug: VARCHAR(100), NOT NULL, UNIQUE (URLに使用するカテゴリ名)
+	• description: TEXT (カテゴリの説明, オプション)
+
+• tags テーブル (タグ情報)
+	• tag_id: INT, 主キー, 自動連番 (タグを一意に識別)
+	• name: VARCHAR(100), NOT NULL, UNIQUE (タグ名)
+	• slug: VARCHAR(100), NOT NULL, UNIQUE (URLに使用するタグ名)
+
+• posts テーブル (記事情報)
+	• post_id: INT, 主キー, 自動連番 (記事を一意に識別)
+	• author_id: INT, NOT NULL, FOREIGN KEY (users) (投稿者ID)
+	• category_id: INT, FOREIGN KEY (categories) (カテゴリID, オプション)
+	• title: VARCHAR(255), NOT NULL (記事タイトル)
+	• slug: VARCHAR(255), NOT NULL, UNIQUE (URLに使用する記事タイトル)
+	• content: TEXT, NOT NULL (記事本文)
+	• created_at: DATETIME, NOT NULL, DEFAULT CURRENT_TIMESTAMP (作成日時)
+	• updated_at: DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP (更新日時)
+	• is_published: BOOLEAN, NOT NULL, DEFAULT FALSE (公開状態)
+
+	• circuit_diagram_url: VARCHAR(255) (電子工作特化: 回路図画像URL, オプション)
+	• parts_list: TEXT (電子工作特化: 部品リスト, オプション)
+	• location: VARCHAR(255) (旅行記特化: 旅行場所, オプション)
+	• travel_date: DATE (旅行記特化: 旅行日, オプション)
+
+• post_tags テーブル (記事 - タグ 中間テーブル)
+	• post_id: INT, PRIMARY KEY, FOREIGN KEY (posts) (記事ID)
+	• tag_id: INT, PRIMARY KEY, FOREIGN KEY (tags) (タグID)
+	• 複合主キー (post_id, tag_id) により、記事とタグの多対多関連を管理します。
+
+• comments テーブル (コメント情報)
+	• comment_id: INT, 主キー, 自動連番 (コメントを一意に識別)
+	• post_id: INT, NOT NULL, FOREIGN KEY (posts) (コメントが投稿された記事ID)
+	• user_id: INT, FOREIGN KEY (users) (コメント投稿者ID, オプション - 匿名の場合NULL)
+	• author_name: VARCHAR(100) (コメント投稿者名, 匿名の場合に利用)
+	• author_email: VARCHAR(255) (コメント投稿者メールアドレス, オプション)
+	• comment_text: TEXT, NOT NULL (コメント本文)
+	• created_at: DATETIME, NOT NULL, DEFAULT CURRENT_TIMESTAMP (投稿日時)
+	• is_approved: BOOLEAN, NOT NULL, DEFAULT FALSE (承認状態)
+
+----------------------------------------------------------------------
+2025/05/17
+
+# モデル定義
+
+class User(UserMixin, db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(100), unique=True, nullable=False)
+    email = db.Column(db.String(100), unique=True, nullable=False)  # メールアドレス
+    password = db.Column(db.String(100), nullable=False)
+    name = db.Column(db.String(15), nullable=False)  # 投稿者名
+    role = db.Column(db.String(10), nullable=False)  # 役割(role)（admin か poster）
+    # 投稿への参照を追加
+    posts = db.relationship('Post', backref='author', lazy=True)
+
+    def __repr__(self):
+        return f"<User(id={self.id}, username={self.username}, role={self.role})>"
+
+
+class Post(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(200), nullable=False)
+    content = db.Column(db.Text, nullable=False)
+    author_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    image_filename = db.Column(db.String(200))  # アップロードされた画像のファイル名
+    category_id = db.Column(db.Integer, db.ForeignKey('category.id'))
+    published = db.Column(db.Boolean, default=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=db.func.now())  # ✅ 自動設定
+    updated_at = db.Column(db.DateTime, onupdate=db.func.now())
+    # メイン画像への参照
+    main_image_id = db.Column(db.Integer, db.ForeignKey('image.image_id'), nullable=True)
+    # 画像（Image）へのリレーションシップ
+    images = db.relationship('Image', back_populates='post', foreign_keys='Image.post_id')
+    def __repr__(self):
+        return f"<Post(id={self.id}, title={self.title}, author_id={self.author_id})>"
+
+
+class Category(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False, unique=True)
+    # 投稿との関連
+    posts = db.relationship('Post', backref='category', lazy=True)
+    def __repr__(self):
+        return f"<Category(id={self.id}, name={self.name})>"
+
+class Image(db.Model):
+    image_id = db.Column(db.Integer, primary_key=True, autoincrement=True, comment="画像を一意に識別するID")
+    post_id = db.Column(db.Integer, db.ForeignKey("post.id"), nullable=False, comment="関連付ける記事ID")
+    original_url = db.Column(db.String(255), nullable=False, comment="原画像のパス/URL")
+    thumbnail_url = db.Column(db.String(255), nullable=False, comment="サムネイル画像のパス/URL")
+    alt_text = db.Column(db.String(255), nullable=True, comment="画像の代替テキスト、SEO/アクセシビリティ向け")
+    caption = db.Column(db.Text, nullable=True, comment="画像のキャプション説明")
+    display_order = db.Column(db.Integer, default=0, comment="同じ記事内での表示順序")
+    is_main_image = db.Column(db.Boolean, default=False, comment="アイキャッチ画像かどうか")
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, comment="登録日時")
+    # リレーションシップ
+    post = db.relationship("Post", foreign_keys=[post_id], back_populates="images")
+    # メイン画像として参照される投稿への逆参照
+    main_for_posts = db.relationship('Post', backref='main_image', foreign_keys='Post.main_image_id')
+    def __repr__(self):
+        return f"<Image(image_id={self.image_id}, post_id={self.post_id}, is_main_image={self.is_main_image})>"

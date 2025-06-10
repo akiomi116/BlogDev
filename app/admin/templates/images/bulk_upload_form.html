@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+
+{% block title %}画像一括アップロード{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>画像一括アップロード</h2>
+    <hr>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }}">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <form action="{{ url_for('admin.bulk_upload_images') }}" method="POST" enctype="multipart/form-data">
+        {{ form.csrf_token }} {# Flask-WTF を使用する場合、CSRFトークンが必要です #}
+        
+        <div class="mb-3">
+            {{ form.image_files.label(class="form-label") }} {# ラベルを表示 #}
+            {{ form.image_files(class="form-control") }} {# input type="file" multiple を表示 #}
+            {% if form.image_files.errors %}
+                <div class="text-danger">
+                    {% for error in form.image_files.errors %}
+                        <span>{{ error }}</span>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        </div>
+
+        {{ form.submit(class="btn btn-primary") }} {# アップロードボタン #}
+        <a href="{{ url_for('admin.list_images') }}" class="btn btn-secondary">キャンセル</a>
+    </form>
+</div>
+{% endblock %}

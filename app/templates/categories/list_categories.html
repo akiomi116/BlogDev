@@ -1,0 +1,54 @@
+{# F:\dev\BrogDev\templates\categories\list_categories.html #}
+
+{% extends "base.html" %}
+{% block title %}カテゴリ一覧{% endblock %}
+{% block content %}
+<div class="container mt-4">
+    <h1 class="mb-4">カテゴリ一覧</h1>
+
+    {# フラッシュメッセージの表示 (もしあれば) #}
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            <div class="mb-4">
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="閉じる"></button>
+                    </div>
+                {% endfor %}
+            </div>
+        {% endif %}
+    {% endwith %}
+
+    <div class="mb-3">
+        <a href="{{ url_for('categories.new_category') }}" class="btn btn-primary">
+            <i class="fas fa-plus"></i> 新しいカテゴリを追加
+        </a>
+    </div>
+
+    {% if categories %}
+        <ul class="list-group">
+            {% for category in categories %}
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    <span>{{ category.name }}</span>
+                    <div class="btn-group btn-group-sm" role="group">
+                        <a href="{{ url_for('home.posts_by_category', category_id=category.id) }}" class="btn btn-info">
+                            <i class="fas fa-eye"></i> 詳細 
+                        </a>
+                        <a href="{{ url_for('categories.edit_category', category_id=category.id) }}" class="btn btn-secondary">
+                            <i class="fas fa-edit"></i> 編集 
+                        </a>
+                        <form action="{{ url_for('categories.delete_category', category_id=category.id) }}" method="POST" onsubmit="return confirm('本当にこのカテゴリを削除しますか？関連する投稿のカテゴリは未分類になります。');" class="d-inline">
+                            <button type="submit" class="btn btn-danger">
+                                <i class="fas fa-trash-alt" me-1></i> 削除 
+                            </button>
+                        </form>
+                    </div>
+                </li>
+            {% endfor %}
+        </ul>
+    {% else %}
+        <p class="text-muted">まだカテゴリが登録されていません。</p>
+    {% endif %}
+</div>
+{% endblock %}

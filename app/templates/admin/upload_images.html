@@ -1,0 +1,28 @@
+{# F:\dev\BrogDev\app\templates\admin\upload_images.html #}
+{% extends "base.html" %}
+
+{% block title %}画像アップロード{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>画像をアップロード</h2>
+    {# ★★★ action属性を追加し、form.images を使用するよう修正 ★★★ #}
+    <form method="POST" action="{{ url_for('uploads.bulk_upload') }}" enctype="multipart/form-data">
+        {{ form.csrf_token }} {# CSRF保護のために必須 #}
+        <div class="mb-3">
+            {# form.images を使用することで、ラベルやエラー表示が自動的に処理される #}
+            {{ form.images.label(class="form-label") }}
+            {{ form.images(class="form-control") }}
+            {% if form.images.errors %}
+                <div class="text-danger">
+                    {% for error in form.images.errors %}<p>{{ error }}</p>{% endfor %}
+                </div>
+            {% endif %}
+        </div>
+        {# form.submit を使用する場合はこちら #}
+        {# {{ form.submit(class="btn btn-primary") }} #}
+        <button type="submit" class="btn btn-primary">アップロード</button>
+        <a href="{{ url_for('uploads.manage_images') }}" class="btn btn-secondary ms-2">キャンセル</a> {# キャンセルボタンも追加 #}
+    </form>
+</div>
+{% endblock %}

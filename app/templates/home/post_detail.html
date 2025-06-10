@@ -1,0 +1,96 @@
+{# F:\dev\BrogDev\app\templates\home\post_detail.html #}
+{% extends "base.html" %} {# base.html を継承 #}
+
+{% block title %}{{ post.title }} - {{ super() }}{% endblock %}
+ 
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <article class="card mb-4">
+                <div class="card-body">
+                    <h1 class="card-title">{{ post.title }}</h1>
+                    <p class="text-muted small">
+                        投稿日: {{ post.created_at.strftime('%Y年%m月%d日 %H:%M') }}
+                        {% if post.author %}
+                        | 著者: {{ post.author.username }}
+                        {% endif %}
+                        {% if post.category %}
+                        | カテゴリ: <a href="{{ url_for('home.posts_by_category', category_id=post.category.id) }}">{{ post.category.name }}</a>
+                        {% endif %}
+                        {% if post.tags %}
+                        | タグ:
+                        {% for tag in post.tags %}
+                            <a href="{{ url_for('home.posts_by_tag', tag_id=tag.id) }}" class="badge bg-info text-dark">{{ tag.name }}</a>{% if not loop.last %},{% endif %}
+                        {% endfor %}
+                        {% endif %}
+                    </p>
+                    <hr>
+                    {% if post.main_image %}
+                    <div class="text-center mb-4">
+                        {# 画像のパスを適切に表示。staticフォルダからの相対パスを想定 #}
+                        <img src="{{ post.main_image.url }}" class="img-fluid rounded" alt="{{ post.title }}" style="max-height: 400px; object-fit: contain;">
+                    </div>
+                    {% endif %}
+
+                    <div class="post-content">
+                        {{ post.body | safe }} {# contentはHTMLとして扱うため | safe を使用 #}
+                    </div>
+                </div>
+            </article>
+
+            {# コメントセクション #}
+            <div class="card mb-4">
+                <div class="card-header bg-secondary text-white">
+                    <h4 class="mb-0">コメント ({{ comments|length }})</h4>
+                </div>
+                <div class="card-body">
+                    {% if comments %}
+                        <ul class="list-unstyled">
+                            {% for comment in comments %}
+                            <li class="mb-3 border-bottom pb-2">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    {# コメント投稿者名を表示: comment.user.username を使用 #}
+                                    <h6 class="mb-0">{{ comment.user.username }}</h6>
+                                    <small class="text-muted">{{ comment.timestamp.strftime('%Y年%m月%d日 %H:%M') }}</small>
+                                </div>
+                                <p class="mb-0">{{ comment.content }}</p>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    {% else %}
+                        <p>まだコメントはありません。</p>
+                    {% endif %}
+
+                    {# ★★★ コメントフォームの表示制御の修正 ★★★ #}
+                    {% if current_user.is_authenticated %}
+                        <h5 class="mt-4">コメントを残す</h5>
+                        <form method="POST" action="{{ url_for('home.post_detail', post_id=post.id) }}">
+                            {{ comment_form.csrf_token }} {# CSRFトークンを追加 #}
+                            {# author_name フィールドはログインユーザーのみに制限するため削除済み #}
+                            <div class="mb-3">
+                                {{ comment_form.content.label(class="form-label") }}
+                                {{ comment_form.content(class="form-control", rows="4") }}
+                                {% if comment_form.content.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {% for error in comment_form.content.errors %}
+                                            <span>{{ error }}</span>
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
+                            {{ comment_form.submit(class="btn btn-primary") }}
+                        </form>
+                    {% else %}
+                        <div class="alert alert-info mt-4" role="alert">
+                            コメントを投稿するには <a href="{{ url_for('auth.login', next=request.path) }}" class="alert-link">ログイン</a> が必要です。
+                        </div>
+                    {% endif %}
+                    {# ★★★ コメントフォームの表示制御の修正終わり ★★★ #}
+
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

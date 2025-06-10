@@ -1,0 +1,1509 @@
+# config.py
+import os
+
+basedir = os.path.abspath(os.path.dirname(__file__))
+
+class Config:
+    SECRET_KEY = os.urandom(24).hex()
+    SQLALCHEMY_DATABASE_URI = 'sqlite:///' + os.path.join(basedir, 'instance', 'akiomi.db')
+    SQLALCHEMY_TRACK_MODIFICATIONS = False
+
+    DEBUG = True  # デバッグモードを有効にする
+
+    # 画像アップロード関連の設定を更新
+    # 静的ファイルの提供元は 'static' ディレクトリなので、パスは 'static' から始める
+    # 'uploads' を 'uploras' に変更し、画像をオリジナルとサムネイルに分ける
+    UPLOAD_FOLDER = os.path.join(basedir, 'static', 'uploads', 'images')
+    THUMBNAIL_FOLDER = os.path.join(basedir, 'static', 'uploads', 'thumbnails')
+
+    ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
+    MAX_CONTENT_LENGTH = 250 * 1024 * 1024  # 16MB (例: 50メガバイト)
+
+    # サムネイル生成に関する設定
+    GENERATE_THUMBNAILS = True # サムネイルを生成するかどうか
+    THUMBNAIL_SIZE = (400, 300) # サムネイルのサイズ (幅, 高さ)
+    
+    print(f"DEBUG: SQLALCHEMY_DATABASE_URI: {SQLALCHEMY_DATABASE_URI}")
+    print(f"DEBUG: UPLOAD_FOLDER: {UPLOAD_FOLDER}")
+    print(f"DEBUG: THUMBNAIL_FOLDER: {THUMBNAIL_FOLDER}")
+----------------------------------------------------------------------
+# F:\dev\BrogDev\app/__init__.py
+
+from flask import Flask, render_template, url_for, request, current_app, send_from_directory, g
+from flask_login import current_user
+from app.extensions import db, migrate, login_manager, csrf, babel, mail
+import logging
+from logging.handlers import RotatingFileHandler
+import os
+from datetime import datetime
+import markdown # ★追加: Markdownライブラリをインポート
+
+# アプリケーションファクトリ関数
+def create_app(config_class):
+    
+    app = Flask(
+        __name__,
+        static_folder=os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'static')
+    )
+    
+    app.config.from_object(config_class)
+
+    app.logger.info(f"DEBUG: Flask app root path: {app.root_path}")
+    app.logger.info(f"DEBUG: Flask app static folder: {app.static_folder}")
+    app.logger.info(f"DEBUG: Flask app static URL path: {app.static_url_path}")
+    app.logger.info(f"DEBUG: Flask app template folder: {app.template_folder}")
+    app.logger.info(f"DEBUG: Flask app instance path: {app.instance_path}")
+
+    # 拡張機能の初期化
+    db.init_app(app)
+    migrate.init_app(app, db)
+    login_manager.init_app(app)
+    csrf.init_app(app)
+    babel.init_app(app)
+    mail.init_app(app)
+
+    # ログインマネージャーの設定
+    login_manager.login_view = 'auth.login'
+    login_manager.login_message = 'このページにアクセスするにはログインしてください。'
+    login_manager.login_message_category = 'info'
+
+    # User Loader の設定
+    from app.models import User # Userモデルをインポート
+    @login_manager.user_loader
+    def load_user(user_id):
+        return db.session.get(User, user_id)
+
+    # ロギングの設定
+    if not app.debug and not app.testing:
+        if not os.path.exists('logs'):
+            os.mkdir('logs')
+        file_handler = RotatingFileHandler('logs/akiomi_blog.log', maxBytes=10240, backupCount=10)
+        file_handler.setFormatter(logging.Formatter(
+            '%(asctime)s %(levelname)s: %(message)s [in %(pathname)s:%(lineno)d]'))
+        file_handler.setLevel(logging.INFO)
+        app.logger.addHandler(file_handler)
+
+        app.logger.setLevel(logging.INFO)
+        app.logger.info('Akiomi Blog startup')
+
+    # コンテキストプロセッサ: 全てのテンプレートで 'current_year' を利用可能にする
+    @app.context_processor
+    def inject_globals():
+        return dict(current_year=datetime.now().year) 
+    
+    # リクエストごとに現在の言語を設定する新しい方法
+    @app.before_request
+    def before_request():
+        g.locale = 'ja' # 一旦、常に日本語に固定
+
+    # MarkdownをHTMLに変換するJinja2フィルターを登録
+    app.jinja_env.filters['markdown_to_html'] = lambda text: markdown.markdown(
+        text, 
+        extensions=[
+            'fenced_code',      # コードブロックをサポート
+            'tables',           # テーブルをサポート
+            'nl2br',            # 改行を<br>に変換
+            'sane_lists',       # リストの解析を改善
+            'codehilite',       # シンタックスハイライト (CSSが必要)
+            'extra',            # 追加機能 (略語、属性リストなど)
+        ]
+    )
+    
+    # 各種ブループリントの登録
+    from app.routes.home import home_bp
+    from app.routes.auth import auth_bp
+    from app.routes.posts import posts_bp
+    from app.routes.categories import categories_bp
+    from app.routes.tags import tags_bp
+    from app.routes.uploads import uploads_bp
+    from app.routes.comments import comments_bp # comments_bpをインポート
+    from app.admin.routes import admin_bp # admin_bpをインポート
+
+    app.register_blueprint(home_bp)
+    app.register_blueprint(auth_bp, url_prefix='/auth')
+    app.register_blueprint(posts_bp, url_prefix='/admin/posts')
+    app.register_blueprint(categories_bp, url_prefix='/admin/categories')
+    app.register_blueprint(tags_bp, url_prefix='/admin/tags')
+    app.register_blueprint(uploads_bp, url_prefix='/admin/uploads')
+    app.register_blueprint(comments_bp, url_prefix='/admin/comments')
+    app.register_blueprint(admin_bp, url_prefix='/admin')
+
+    # 全てのブループリント登録後にURLマップをログに出力
+    app.logger.info("Registered URL Rules:")
+    for rule in app.url_map.iter_rules():
+        app.logger.info(f"Endpoint: {rule.endpoint}, Methods: {rule.methods}, Rule: {rule.rule}")
+
+    # コンテキストプロセッサ: 全てのテンプレートで 'current_user' を利用可能にする
+    @app.context_processor
+    def inject_current_user():
+        return dict(current_user=current_user)
+
+    # 静的ファイル配信のためのエンドポイント (アップロードされた画像など)
+    @app.route('/uploads/images/<path:filename>')
+    def serve_uploads(filename):
+        return send_from_directory(current_app.config['UPLOAD_FOLDER'], filename)
+
+    @app.route('/uploads/thumbnails/<path:filename>')
+    def serve_thumbnails(filename):
+        return send_from_directory(current_app.config['THUMBNAIL_FOLDER'], filename)
+
+    # エラーハンドリング (例: 404 Not Found)
+    @app.errorhandler(404)
+    def not_found_error(error):
+        return render_template('errors/404.html'), 404
+
+    @app.errorhandler(500)
+    def internal_error(error):
+        db.session.rollback()
+        return render_template('errors/500.html'), 500
+    
+    # ユーザーモデルとロールモデルが読み込まれるようにimport
+    # create_app関数の最後でdb.create_all()と初期データ投入を行う
+    with app.app_context():
+        db.create_all()
+        # 初期ロールの作成（アプリケーション初回起動時のみ）
+        from app.models import Role, User # ここでRole, Userモデルをインポート
+        if Role.query.count() == 0:
+            admin_role = Role(name='admin', description='Administrator with full access.') 
+            poster_role = Role(name='poster', description='User who can create and manage posts.') 
+            user_role = Role(name='user', description='Standard user with view access.') 
+            db.session.add_all([admin_role, poster_role, user_role])
+            db.session.commit()
+            app.logger.info("Default roles (admin, poster, user) created.")
+
+    return app
+----------------------------------------------------------------------
+# F:\dev\BrogDev\app\models.py
+
+import uuid
+from datetime import datetime
+from flask_login import UserMixin
+from sqlalchemy.dialects.postgresql import UUID 
+from sqlalchemy.schema import PrimaryKeyConstraint, UniqueConstraint
+import pytz
+from app.extensions import db
+
+from sqlalchemy_utils import UUIDType
+from sqlalchemy.orm import relationship 
+from werkzeug.security import generate_password_hash, check_password_hash
+from flask import url_for, current_app
+
+
+# 多対多のリレーションシップ用ヘルパーテーブル
+post_tags = db.Table(
+    'post_tags',
+    db.Column('post_id', UUIDType(binary=False), db.ForeignKey('post.id'), primary_key=True),
+    db.Column('tag_id', UUIDType(binary=False), db.ForeignKey('tag.id'), primary_key=True)
+)
+
+class Role(db.Model):
+    """
+    アプリケーションにおけるユーザーの役割を表し、権限やアクセスレベルを定義します。
+    """
+    __tablename__ = 'role'
+    id = db.Column(db.Integer, primary_key=True) 
+    name = db.Column(db.String(64), unique=True, nullable=False)
+    description = db.Column(db.String(256), nullable=True)
+
+    def __repr__(self):
+        return f'<Role {self.name}>'
+
+class User(UserMixin, db.Model):
+    """
+    アプリケーションのユーザーを表し、認証と、ユーザーが作成したコンテンツ
+    （投稿、カテゴリ、タグ、画像、コメント）との関係を処理します。
+    """
+    __tablename__ = 'user'
+    id = db.Column(UUIDType(binary=False), primary_key=True, default=uuid.uuid4)
+    username = db.Column(db.String(64), unique=True, nullable=False)
+    email = db.Column(db.String(120), unique=True, nullable=False)
+    password_hash = db.Column(db.String(256), nullable=False)
+    
+    role_id = db.Column(db.Integer, db.ForeignKey('role.id'), nullable=True)
+
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(pytz.utc), nullable=False)
+    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(pytz.utc), onupdate=lambda: datetime.now(pytz.utc), nullable=False)
+
+    role = relationship('Role', backref=db.backref('users', lazy='dynamic'))
+
+    posts = relationship('Post', backref='posted_by', lazy='dynamic', cascade='all, delete-orphan')
+    categories = relationship('Category', backref='user', lazy='dynamic', cascade='all, delete-orphan')
+    tags = relationship('Tag', backref='user', lazy='dynamic', cascade='all, delete-orphan')
+    uploaded_images = relationship('Image', back_populates='uploader', lazy='dynamic', cascade='all, delete-orphan')
+    comments = relationship('Comment', backref='comment_author', lazy='dynamic', cascade='all, delete-orphan')
+
+    def __repr__(self):
+        return f'<User {self.username}>'
+
+    def set_password(self, password):
+        """与えられたパスワードをハッシュ化して保存します。"""
+        self.password_hash = generate_password_hash(password)
+
+    def check_password(self, password):
+        """与えられたパスワードが保存されたハッシュと一致するかを確認します。"""
+        return check_password_hash(self.password_hash, password)
+
+class Category(db.Model):
+    """
+    投稿を整理するためのカテゴリを表し、特定のユーザーに関連付けられます。
+    ユーザーごとにカテゴリ名とスラッグの一意性を保証します。
+    """
+    __tablename__ = 'category'
+    id = db.Column(UUIDType(binary=False), primary_key=True, default=uuid.uuid4)
+    name = db.Column(db.String(128), nullable=False)
+    slug = db.Column(db.String(128), nullable=False)
+    description = db.Column(db.String(256))
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(pytz.utc), nullable=False)
+    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(pytz.utc), onupdate=lambda: datetime.now(pytz.utc), nullable=False)
+    
+    user_id = db.Column(UUIDType(binary=False), db.ForeignKey('user.id'), nullable=False)
+
+    __table_args__ = (UniqueConstraint('name', 'user_id', name='_category_name_user_id_uc'),
+                      UniqueConstraint('slug', 'user_id', name='_category_slug_user_id_uc'))
+    posts = relationship('Post', backref='category', lazy='dynamic')
+
+    def __repr__(self):
+        return f'<Category {self.name}>'
+
+class Tag(db.Model):
+    """
+    投稿を分類するためのタグを表し、特定のユーザーに関連付けられます。
+    ユーザーごとにタグ名とスラッグの一意性を保証します。
+    """
+    __tablename__ = 'tag'
+    
+    id = db.Column(UUIDType(binary=False), primary_key=True, default=uuid.uuid4)
+    name = db.Column(db.String(64), nullable=False)
+    slug = db.Column(db.String(64), nullable=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(pytz.utc), nullable=False)
+    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(pytz.utc), onupdate=lambda: datetime.now(pytz.utc), nullable=False)
+
+    user_id = db.Column(UUIDType(binary=False), db.ForeignKey('user.id'), nullable=False)
+
+    __table_args__ = (UniqueConstraint('name', 'user_id', name='_tag_name_user_id_uc'),
+                      UniqueConstraint('slug', 'user_id', name='_tag_slug_user_id_uc'))
+
+    def __repr__(self):
+        return f'<Tag {self.name}>'
+
+# ★★★ 変更開始: Image クラスを Post クラスの前に移動 ★★★
+class Image(db.Model):
+    """
+    ユーザーがアップロードした画像を表し、メイン画像または投稿内の埋め込み画像として使用できます。
+    """
+    __tablename__ = 'image' 
+    id = db.Column(UUIDType(binary=False), primary_key=True, default=uuid.uuid4) 
+    original_filename = db.Column(db.String(255), nullable=False)
+    unique_filename = db.Column(db.String(255), unique=True, nullable=False)
+    thumbnail_filename = db.Column(db.String(255), nullable=True) 
+    filepath = db.Column(db.String(500), nullable=False) 
+    thumbnail_filepath = db.Column(db.String(500), nullable=True) 
+    uploaded_at = db.Column(db.DateTime, default=lambda: datetime.now(pytz.utc))
+    user_id = db.Column(UUIDType(binary=False), db.ForeignKey('user.id'), nullable=False) 
+    is_main_image = db.Column(db.Boolean, default=False)
+    alt_text = db.Column(db.String(255), nullable=True) 
+
+    # 埋め込み画像としてPostに紐づくための外部キー
+    post_id = db.Column(UUIDType(binary=False), db.ForeignKey('post.id'), nullable=True) 
+
+    # リレーションシップ
+    uploader = relationship('User', back_populates='uploaded_images') 
+
+    # Imageが紐づくPostへのリレーションシップ（埋め込み画像の場合）
+    # foreign_keys: このリレーションシップがImage.post_idを参照することを明示
+    post = relationship('Post', back_populates='images', foreign_keys=[post_id]) 
+
+    @property
+    def url(self):
+        if current_app:
+            return url_for('static', filename=f'uploads/images/{self.unique_filename}')
+        return f'/static/uploads/images/{self.unique_filename}'
+
+
+    @property
+    def thumbnail_url(self):
+        if self.thumbnail_filename:
+            if current_app:
+                return url_for('static', filename=f'uploads/thumbnails/{self.thumbnail_filename}')
+            return f'/static/uploads/thumbnails/{self.thumbnail_filename}'
+        return None 
+
+    def __repr__(self):
+        return f"<Image {self.unique_filename}>"
+# ★★★ 変更終了: Image クラスを Post クラスの前に移動 ★★★
+
+class Post(db.Model):
+    """
+    ブログ投稿を表し、そのコンテンツ、公開ステータス、
+    および作成者、カテゴリ、タグ、画像との関係を含みます。
+    """
+    __tablename__ = 'post'
+    id = db.Column(UUIDType(binary=False), primary_key=True, default=uuid.uuid4)
+    title = db.Column(db.String(256), nullable=False)
+    content = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(pytz.utc), nullable=False)
+    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(pytz.utc), onupdate=lambda: datetime.now(pytz.utc), nullable=False)
+    is_published = db.Column(db.Boolean, default=False, nullable=False)
+
+    user_id = db.Column(UUIDType(binary=False), db.ForeignKey('user.id'), nullable=False) # 投稿者
+    category_id = db.Column(UUIDType(binary=False), db.ForeignKey('category.id'), nullable=True) # 所属カテゴリ (オプション)
+    
+    main_image_id = db.Column(UUIDType(binary=False), db.ForeignKey('image.id'), unique=True, nullable=True) # メイン画像ID
+
+    # PostとImageの一対一リレーションシップ (main_image)
+    main_image = relationship('Image', 
+                               backref=db.backref('post_as_main_image', uselist=False), 
+                               foreign_keys=[main_image_id], # main_image_id を参照
+                               post_update=True) # 循環参照の警告回避のため
+    # backref='post_as_main_image' により、Imageオブジェクト (img) から img.post_as_main_image でPostオブジェクトにアクセス可能
+
+    # PostとImageの一対多リレーションシップ（埋め込み画像）
+    # Imageモデルのpost_idを参照し、back_populates='post'と整合させる
+    images = relationship('Image',
+                          primaryjoin="Post.id == Image.post_id",
+                          back_populates='post',
+                          foreign_keys=[Image.post_id], 
+                          cascade='all, delete-orphan')
+
+    tags = relationship('Tag', secondary=post_tags, backref=db.backref('posts', lazy='dynamic'))
+
+    comments = relationship('Comment', backref='post', lazy='dynamic', cascade='all, delete-orphan')
+
+    def __repr__(self):
+        return f'<Post {self.title}>'
+        
+class Comment(db.Model):
+    """
+    ユーザーがブログ投稿に対して行ったコメントを表します。
+    """
+    __tablename__ = 'comment'
+    id = db.Column(UUIDType(binary=False), primary_key=True, default=uuid.uuid4)
+    content = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(pytz.utc), nullable=False)
+    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(pytz.utc), onupdate=lambda: datetime.now(pytz.utc), nullable=False)
+    is_approved = db.Column(db.Boolean, default=False, nullable=False)
+
+    user_id = db.Column(UUIDType(binary=False), db.ForeignKey('user.id'), nullable=False) 
+    post_id = db.Column(UUIDType(binary=False), db.ForeignKey('post.id'), nullable=False) 
+
+    def __repr__(self):
+        return f'<Comment {self.id} on Post {self.post_id}>'
+----------------------------------------------------------------------
+# F:\dev\BrogDev\app\forms.py
+
+from flask_wtf import FlaskForm
+from wtforms import StringField, PasswordField, SubmitField, TextAreaField, BooleanField, FileField, SelectField, MultipleFileField, SelectMultipleField
+from wtforms.validators import DataRequired, Email, EqualTo, Length, ValidationError, Optional
+from flask_wtf.file import FileAllowed, FileRequired
+from app.models import User, Category, Role, Tag 
+from flask_login import current_user # current_user をインポート
+import logging # ロギングをインポート
+
+logger = logging.getLogger(__name__) # ロガーを設定
+
+# 認証フォーム (ログイン・登録兼用)
+class AuthForm(FlaskForm):
+    username = StringField('ユーザー名', validators=[DataRequired(), Length(min=4, max=25)])
+    email = StringField('メールアドレス', validators=[DataRequired(), Email()])
+    password = PasswordField('パスワード', validators=[DataRequired(), Length(min=6)])
+    confirm_password = PasswordField('パスワード（確認）', validators=[DataRequired(), EqualTo('password', message='パスワードが一致しません')])
+    submit = SubmitField('登録')
+
+    # ユーザー名の一意性バリデーション
+    def validate_username(self, username):
+        user = User.query.filter_by(username=username.data).first()
+        if user:
+            raise ValidationError('このユーザー名は既に使われています。')
+
+    # メールアドレスの一意性バリデーション
+    def validate_email(self, email):
+        user = User.query.filter_by(email=email.data).first()
+        if user:
+            raise ValidationError('このメールアドレスは既に登録されています。')
+
+class LoginForm(FlaskForm):
+    username = StringField('ユーザー名', validators=[DataRequired()])
+    password = PasswordField('パスワード', validators=[DataRequired()])
+    remember_me = BooleanField('ログイン情報を記憶する')
+    submit = SubmitField('ログイン')
+
+# ユーザー管理フォーム
+class UserForm(FlaskForm):
+    username = StringField('ユーザー名', validators=[DataRequired(), Length(min=4, max=25)])
+    email = StringField('メールアドレス', validators=[DataRequired(), Email()])
+    password = PasswordField('パスワード', validators=[Optional(), Length(min=6)], description='変更する場合のみ入力')
+    confirm_password = PasswordField('パスワード（確認）', validators=[EqualTo('password', message='パスワードが一致しません')])
+    
+    # ロールの選択肢を動的に設定するため、choicesはコンストラクタで設定
+    role_id = SelectField('ロール', coerce=str, validators=[DataRequired()])
+    submit = SubmitField('更新')
+
+    def __init__(self, *args, **kwargs):
+        super(UserForm, self).__init__(*args, **kwargs)
+        # ロールの選択肢をデータベースから取得
+        self.role_id.choices = [(str(role.id), role.name) for role in Role.query.all()]
+
+
+# ロール管理フォーム
+class RoleForm(FlaskForm):
+    name = StringField('ロール名', validators=[DataRequired(), Length(max=50)])
+    submit = SubmitField('保存')
+
+    def validate_name(self, name):
+        role = Role.query.filter_by(name=name.data).first()
+        if role and not self.obj or (self.obj and self.obj.name != name.data): # 編集時は自分自身の名前は許容
+            raise ValidationError('このロール名は既に存在します。')
+
+# カテゴリ管理フォーム
+class CategoryForm(FlaskForm):
+    name = StringField('カテゴリ名', validators=[DataRequired(), Length(min=2, max=100)])
+    slug = StringField('スラッグ', validators=[Optional(), Length(min=2, max=100)])
+    description = TextAreaField('説明', validators=[Length(max=500)])
+    submit = SubmitField('保存')
+ 
+    def validate_name(self, name):
+        # 新規作成時と編集時で異なるロジック
+        if not hasattr(self, 'obj') or self.obj is None:  # 新規作成時
+            category = Category.query.filter_by(name=name.data).first()
+            if category:
+                raise ValidationError('このカテゴリ名は既に存在します。')
+        else:  # 編集時
+            # 既存のカテゴリと名前が同じで、かつそれが現在のカテゴリではない場合
+            category = Category.query.filter_by(name=name.data).first()
+            if category and category.id != self.obj.id:
+                raise ValidationError('このカテゴリ名は既に存在します。')
+
+    def validate_slug(self, slug):
+        # 新規作成時と編集時で異なるロジック
+        if not hasattr(self, 'obj') or self.obj is None:  # 新規作成時
+            category = Category.query.filter_by(slug=slug.data).first()
+            if category:
+                raise ValidationError('このスラッグは既に存在します。')
+        else:  # 編集時
+            category = Category.query.filter_by(slug=slug.data).first()
+            if category and category.id != self.obj.id:
+                raise ValidationError('このスラッグは既に存在します。')
+
+
+# タグ管理フォーム
+class TagForm(FlaskForm):
+    name = StringField('タグ名', validators=[DataRequired(), Length(max=100)])
+    submit = SubmitField('保存')
+
+    def validate_name(self, name):
+        # 新規作成時と編集時で異なるロジック
+        if not hasattr(self, 'obj') or self.obj is None:  # 新規作成時
+            tag = Tag.query.filter_by(name=name.data).first()
+            if tag:
+                raise ValidationError('このタグ名は既に存在します。')
+        else:  # 編集時
+            # 既存のタグと名前が同じで、かつそれが現在のタグではない場合
+            tag = Tag.query.filter_by(name=name.data).first()
+            if tag and tag.id != self.obj.id:  # IDで比較して自分自身を除外
+                raise ValidationError('このタグ名は既に存在します。')
+
+
+# 投稿フォーム
+class PostForm(FlaskForm):
+    title = StringField('タイトル', validators=[DataRequired(), Length(max=200)])
+    content = TextAreaField('内容', validators=[DataRequired()])
+    
+    # メイン画像用フィールド
+    main_image_file = FileField('メイン画像', validators=[
+        FileAllowed(['jpg', 'png', 'jpeg', 'gif'], '画像ファイルのみアップロード可能です！'),
+        Optional() # 画像のアップロードは任意
+    ])
+    
+    is_published = BooleanField('公開する', default=False)
+    
+    # ★★★ 確認箇所: カテゴリのフィールド名が 'category' であることを確認 ★★★
+    category = SelectField('カテゴリ', coerce=str, validators=[Optional()])
+    
+    # タグの入力（文字列として受け取り、後で解析）
+    tags = SelectMultipleField('タグ (Ctrl/Cmdキーで複数選択)', coerce=str, validators=[Optional()])
+    submit = SubmitField('保存')
+
+    def __init__(self, *args, **kwargs):
+        super(PostForm, self).__init__(*args, **kwargs)
+        
+        # カテゴリの選択肢をデータベースから取得
+        if current_user.is_authenticated:
+            if hasattr(current_user, 'role') and current_user.role and current_user.role.name == 'admin':
+                categories = Category.query.order_by(Category.name.asc()).all()
+                logger.debug(f"DEBUG(PostForm): Admin user {current_user.username} fetching all categories.")
+            else:
+                categories = Category.query.filter_by(user_id=current_user.id).order_by(Category.name.asc()).all()
+                logger.debug(f"DEBUG(PostForm): User {current_user.username} fetching their own categories.")
+        else:
+            categories = [] # ログインしていない場合はカテゴリなし
+            logger.debug("DEBUG(PostForm): Anonymous user, no categories loaded.")
+
+        self.category.choices = [('', 'カテゴリなし')] + [(str(c.id), c.name) for c in categories]
+        logger.debug(f"DEBUG(PostForm): Loaded {len(self.category.choices) - 1} categories for SelectField. Choices: {self.category.choices}")
+
+        # タグの選択肢を初期化時に設定
+        if current_user.is_authenticated:
+            if hasattr(current_user, 'role') and current_user.role and current_user.role.name == 'admin':
+                tags = Tag.query.order_by(Tag.name.asc()).all()
+                logger.debug(f"DEBUG(PostForm): Admin user {current_user.username} fetching all tags.")
+            else:
+                tags = Tag.query.order_by(Tag.name.asc()).all()
+                logger.debug(f"DEBUG(PostForm): User {current_user.username} fetching all tags (or shared tags if filtered).")
+        else:
+            tags = [] # ログインしていない場合はタグなし
+            logger.debug("DEBUG(PostForm): Anonymous user, no tags loaded.")
+
+        self.tags.choices = [(str(t.id), t.name) for t in tags]
+        logger.debug(f"DEBUG(PostForm): Loaded {len(self.tags.choices)} tags for SelectMultipleField. Choices: {self.tags.choices}")
+
+
+# 画像アップロードフォーム
+# 単一ファイルアップロード用
+class ImageUploadForm(FlaskForm):
+    image_file = FileField('画像ファイル', validators=[
+        FileRequired('ファイルを選択してください。'),
+        FileAllowed(['jpg', 'png', 'jpeg', 'gif'], '画像ファイル (jpg, png, jpeg, gif) のみアップロード可能です。')
+    ])
+    submit = SubmitField('アップロード') 
+
+
+# 複数ファイルアップロード用フォーム
+class BulkImageUploadForm(FlaskForm):
+    images = MultipleFileField('画像ファイルを選択してください (複数選択可)', validators=[FileRequired()])
+    submit = SubmitField('一括アップロード')
+----------------------------------------------------------------------
+# F:\dev\BrogDev\app\routes\auth.py
+
+from flask import Blueprint, render_template, redirect, url_for, flash, request, current_app
+from flask_login import login_user, logout_user, login_required, current_user
+from app.models import User, Role # User, Role モデルをインポート
+from app.extensions import db
+# ★★★ここが修正点★★★
+# from app.forms import LoginForm, RegistrationForm # 以前のインポート
+from app.forms import LoginForm, AuthForm # AuthFormをインポート (登録用)
+import logging
+
+logger = logging.getLogger(__name__)
+
+auth_bp = Blueprint('auth', __name__)
+
+# ログイン
+@auth_bp.route('/login', methods=['GET', 'POST'])
+def login():
+    if current_user.is_authenticated:
+        return redirect(url_for('home.dashboard')) # ログイン済みならダッシュボードへ
+
+    form = LoginForm()
+    if form.validate_on_submit():
+        user = User.query.filter_by(username=form.username.data).first()
+        if user and user.check_password(form.password.data):
+            login_user(user, remember=form.remember_me.data)
+            flash('ログインしました。', 'success')
+            next_page = request.args.get('next')
+            current_app.logger.info(f"User {user.username} logged in. Redirecting to {next_page or 'home.dashboard'}")
+            return redirect(next_page or url_for('home.dashboard'))
+        else:
+            flash('ユーザー名またはパスワードが正しくありません。', 'danger')
+            current_app.logger.warning(f"Failed login attempt for username: {form.username.data}")
+    return render_template('auth/login.html', form=form)
+
+
+# ユーザー登録
+@auth_bp.route('/register', methods=['GET', 'POST'])
+def register():
+    if current_user.is_authenticated:
+        return redirect(url_for('home.dashboard')) # ログイン済みならダッシュボードへ
+
+    form = AuthForm() # AuthFormを使用
+    if form.validate_on_submit():
+        # デフォルトのロール（例: 'user' または 'poster'）を取得
+        # ロールが存在しない場合は、ここで初期化を行う必要があるかもしれない
+        # または、初期設定時にロールをDBに登録しておく
+        default_role = Role.query.filter_by(name='user').first()
+        if not default_role:
+            # もし'user'ロールが存在しない場合は作成
+            # これはアプリケーションの初期設定時に行うべきですが、緊急対応としてここに記述
+            default_role = Role(name='user')
+            db.session.add(default_role)
+            db.session.commit()
+            logger.info("Default 'user' role created as it did not exist.")
+
+        user = User(
+            username=form.username.data,
+            email=form.email.data,
+            role=default_role # ユーザーにロールを割り当て
+        )
+        user.set_password(form.password.data) # パスワードをハッシュ化して設定
+        try:
+            db.session.add(user)
+            db.session.commit()
+            flash('登録が完了しました。ログインしてください。', 'success')
+            current_app.logger.info(f"New user {user.username} registered.")
+            return redirect(url_for('auth.login'))
+        except Exception as e:
+            db.session.rollback()
+            flash(f'登録中にエラーが発生しました: {e}', 'danger')
+            current_app.logger.error(f"Error during user registration: {e}", exc_info=True)
+            
+    return render_template('auth/register.html', form=form)
+
+
+# ログアウト
+@auth_bp.route('/logout')
+@login_required
+def logout():
+    current_app.logger.info(f"User {current_user.username} logged out.")
+    logout_user()
+    flash('ログアウトしました。', 'info')
+    return redirect(url_for('auth.login'))
+----------------------------------------------------------------------
+# F:\dev\BrogDev\app\routes\home.py
+
+from flask import Blueprint, render_template, request, flash, redirect, url_for, current_app, abort
+from flask_login import login_required, current_user
+from app.extensions import login_manager
+from app.extensions import db
+from app.models import Post, Category, Tag, Image
+# 以前のインポート: from .uploads import create_thumbnail, delete_file # ★この行を削除またはコメントアウト★
+from app.utils import create_thumbnail, delete_file # ★この行に修正★
+import uuid
+import os
+from datetime import datetime
+import logging
+from sqlalchemy.orm import selectinload
+
+# ロガーの設定
+logger = logging.getLogger(__name__)
+
+# home Blueprint の作成
+# このBlueprintの名前は 'home' です。
+# url_prefix は設定しないため、ルートはそのまま '/' や '/dashboard' となる
+home_bp = Blueprint('home', __name__)
+
+
+# トップページ（ブログ記事一覧など）
+# URL: / または /index
+@home_bp.route('/')
+@home_bp.route('/index')
+def index():
+    current_app.logger.debug("DEBUG(home): index route accessed.")
+    posts = Post.query.filter_by(is_published=True).order_by(Post.created_at.desc()).all()
+    
+    # image_map も必要ならここで取得して渡す
+    all_image_ids = [p.main_image_id for p in posts if p.main_image_id]
+    images = Image.query.filter(Image.id.in_(all_image_ids)).all()
+    image_map = {img.id: img for img in images}
+
+    return render_template('home/index.html', posts=posts, image_map=image_map)
+
+
+# ダッシュボード
+# URL: /dashboard
+# ログインしているユーザーのみがアクセス可能
+@home_bp.route('/dashboard')
+@login_required
+def dashboard():
+    current_app.logger.debug("DEBUG(home): dashboard route accessed.")
+    # デバッグ用コードを追加
+    print(f"===****=== ユーザー情報 デバッグ ===")
+    print(f"User ID: {current_user.id}")
+    print(f"Username: {current_user.username}")
+    print(f"User role: {current_user.role}")
+    print(f"Role type: {type(current_user.role)}")
+    print(f"===****===================== ======")
+    
+    # current_user に紐づく投稿をすべて取得
+    all_posts = Post.query.options(
+        selectinload(Post.main_image),
+        selectinload(Post.category),
+        selectinload(Post.tags)
+    ).filter_by(user_id=current_user.id).order_by(Post.created_at.desc()).all()
+
+    # 統計情報のために、all_posts を直接使用
+    total_posts = len(all_posts)
+    published_posts = sum(1 for p in all_posts if p.is_published)
+    draft_posts = total_posts - published_posts
+
+    actual_category_count = Category.query.count()
+
+    categories = Category.query.all()
+
+    # カテゴリごとに投稿をグループ化
+    grouped_posts = {} 
+    for category in categories:
+        posts_in_category = [p for p in all_posts if p.category == category]
+        if posts_in_category: # 投稿があるカテゴリのみ追加
+            grouped_posts[category.name] = sorted(posts_in_category, key=lambda p: p.created_at, reverse=True)
+
+    # 未分類の投稿
+    uncategorized_posts = [p for p in all_posts if p.category is None]
+    if uncategorized_posts:
+        grouped_posts['未分類'] = sorted(uncategorized_posts, key=lambda p: p.created_at, reverse=True)
+
+    # image_map の作成ロジック
+    image_map = {p.main_image.id: p.main_image for p in all_posts if p.main_image}
+
+    return render_template('home/dashboard.html',
+                           total_posts=total_posts,
+                           published_posts=published_posts,
+                           draft_posts=draft_posts,
+                           grouped_posts=grouped_posts,
+                           categories=categories,
+                           image_map=image_map,
+                           actual_category_count=actual_category_count)
+
+# カテゴリ別投稿一覧
+# URL: /posts_by_category/<UUID>
+@home_bp.route('/posts_by_category/<uuid:category_id>')
+def posts_by_category(category_id):
+    current_app.logger.debug(f"DEBUG(home): posts_by_category route accessed for category_id: {category_id}")
+    category = db.session.get(Category, category_id)
+    if category is None:
+        abort(404)
+    
+    posts = category.posts.filter_by(is_published=True).order_by(Post.created_at.desc()).all()
+
+    all_image_ids = [p.main_image_id for p in posts if p.main_image_id]
+    images = Image.query.filter(Image.id.in_(all_image_ids)).all()
+    image_map = {img.id: img for img in images}
+
+    return render_template('home/posts_by_category.html', category=category, posts=posts, image_map=image_map)
+
+# タグ別投稿一覧
+# URL: /posts_by_tag/<UUID>
+@home_bp.route('/posts_by_tag/<uuid:tag_id>')
+def posts_by_tag(tag_id):
+    current_app.logger.debug(f"DEBUG(home): posts_by_tag route accessed for tag_id: {tag_id}")
+    tag = db.session.get(Tag, tag_id)
+    if tag is None:
+        abort(404)
+    
+    posts = tag.posts.filter_by(is_published=True).order_by(Post.created_at.desc()).all()
+
+    all_image_ids = [p.main_image_id for p in posts if p.main_image_id]
+    images = Image.query.filter(Image.id.in_(all_image_ids)).all()
+    image_map = {img.id: img for img in images}
+
+    return render_template('home/posts_by_tag.html', tag=tag, posts=posts, image_map=image_map)
+----------------------------------------------------------------------
+# F:\dev\BrogDev\app\routes\posts.py
+
+from flask import Blueprint, render_template, request, flash, redirect, url_for, current_app, abort
+from flask_login import login_required, current_user
+from app.extensions import db
+from app.models import Post, Category, Tag, Image # Imageモデルがインポートされていることを確認
+from app.forms import PostForm
+from app.utils import save_image_and_thumbnail, delete_file # save_image_and_thumbnail, delete_fileがインポートされていることを確認
+import os
+import logging
+import uuid
+from datetime import datetime
+from sqlalchemy.orm import selectinload
+import pytz # タイムゾーン対応のためにインポート
+
+logger = logging.getLogger(__name__)
+
+posts_bp = Blueprint(
+    'posts',
+    __name__,
+    url_prefix='/admin', # このBlueprintのURLは '/admin' から始まる
+    template_folder=os.path.join(os.path.abspath(os.path.dirname(__file__)), '../admin/templates') # テンプレートの場所を指定
+)
+
+# --- ルート定義 ---
+
+# 投稿一覧表示
+@posts_bp.route('/posts') # URLとしては /admin/posts になります
+@login_required
+def list_posts():
+    """
+    全ての投稿を一覧表示します。
+    adminまたはposterロールのユーザーのみアクセス可能です。
+    """
+    # 権限チェック: admin または poster のみアクセス可能
+    if not current_user.is_authenticated or \
+       not hasattr(current_user, 'role') or \
+       not current_user.role or \
+       current_user.role.name not in ['admin', 'poster']:
+        flash('このページにアクセスする権限がありません。', 'danger')
+        current_app.logger.warning(f"ACCESS_DENIED: User {current_user.id if current_user.is_authenticated else 'Anonymous'} attempted to access list_posts without sufficient role.")
+        abort(403) # 権限がない場合は403エラー
+
+    # 全ての投稿を取得し、新しいものから順に並べる
+    # 関連するauthor (posted_by) と main_image もまとめてロードする (N+1問題対策)
+    posts = db.session.query(Post).options(
+        selectinload(Post.posted_by), # 投稿者情報をまとめてロード
+        selectinload(Post.main_image), # メイン画像情報をまとめてロード
+        selectinload(Post.category), # カテゴリ情報をまとめてロード
+        selectinload(Post.tags) # タグ情報をまとめてロード
+    ).order_by(Post.created_at.desc()).all()
+
+    current_app.logger.debug(f"DEBUG(list_posts): Found {len(posts)} posts.")
+
+    # ★★★ 修正箇所: 'posts/list_posts.html' に変更 ★★★
+    return render_template('posts/list_posts.html', posts=posts)
+
+
+# 新規投稿作成
+@posts_bp.route('/new_post', methods=['GET', 'POST'])
+@login_required
+def new_post():
+    """
+    新しい投稿を作成します。
+    adminまたはposterロールのユーザーのみアクセス可能です。
+    """
+    form = PostForm()
+    # 権限チェック: admin または poster のみアクセス可能
+    if not current_user.is_authenticated or \
+       not hasattr(current_user, 'role') or \
+       not current_user.role or \
+       current_user.role.name not in ['admin', 'poster']:
+        flash('この操作を行う権限がありません。', 'danger')
+        current_app.logger.warning(f"ACCESS_DENIED: User {current_user.id if current_user.is_authenticated else 'Anonymous'} attempted to access new_post without sufficient role.")
+        abort(403) # 権限がない場合は403エラー
+
+    if form.validate_on_submit():
+        try:
+            # カテゴリの割り当て
+            category_id_to_assign = None
+            if form.category.data:
+                try:
+                    category_id_to_assign = uuid.UUID(form.category.data)
+                except ValueError:
+                    # 無効なUUID形式の場合、Noneとする
+                    flash('無効なカテゴリが選択されました。', 'warning')
+                    current_app.logger.warning(f"Invalid category UUID received: {form.category.data}")
+
+            new_post = Post(
+                title=form.title.data,
+                content=form.content.data,
+                user_id=current_user.id,
+                category_id=category_id_to_assign # カテゴリIDを割り当て
+            )
+            
+            # タグの割り当て
+            selected_tag_ids = form.tags.data # WTFormsからUUID文字列のリストとして取得
+            if selected_tag_ids:
+                # 選択されたタグのIDに基づいてTagオブジェクトを取得
+                # filter(Tag.id.in_(...)) で複数のIDを効率的にクエリ
+                tags = Tag.query.filter(Tag.id.in_(selected_tag_ids)).all()
+                new_post.tags.extend(tags) # 投稿にタグを追加 (多対多のリレーションシップ)
+
+            # --- メイン画像のアップロードまたは既存画像の選択ロジック ---
+            main_image_to_assign = None
+
+            # 1. 新しいファイルがアップロードされた場合を優先
+            # form.main_image_file.data は FileStorage オブジェクト
+            # .filename が存在することを確認して、ファイルが実際にアップロードされたか判断
+            if form.main_image_file.data and form.main_image_file.data.filename:
+                image_file = form.main_image_file.data
+                image_info = save_image_and_thumbnail(
+                    image_file,
+                    current_app.config['UPLOAD_FOLDER'],
+                    current_app.config['THUMBNAIL_FOLDER'],
+                    current_user.id
+                )
+                if image_info:
+                    new_image_obj = Image(
+                        original_filename=image_info['original_filename'],
+                        unique_filename=image_info['unique_filename'],
+                        thumbnail_filename=image_info['thumbnail_filename'],
+                        filepath=image_info['filepath'],
+                        thumbnail_filepath=image_info['thumbnail_filepath'],
+                        user_id=image_info['user_id'],
+                        is_main_image=True
+                    )
+                    db.session.add(new_image_obj)
+                    db.session.flush() # IDを生成させる
+                    main_image_to_assign = new_image_obj
+                    current_app.logger.info(f"New main image {new_image_obj.id} uploaded and set for new post.")
+            
+            # 2. ファイルがアップロードされず、既存の画像IDが指定された場合
+            # request.form.get('selected_image_id') で隠しフィールドの値を取得
+            elif request.form.get('selected_image_id'):
+                selected_image_id_str = request.form.get('selected_image_id')
+                try:
+                    selected_image_uuid = uuid.UUID(selected_image_id_str)
+                    existing_image = Image.query.filter_by(id=selected_image_uuid).first()
+                    
+                    if existing_image:
+                        # 権限チェック: 選択された画像が自身の画像であるか、またはadminロールであるか
+                        if existing_image.user_id == current_user.id or current_user.role.name == 'admin':
+                            main_image_to_assign = existing_image
+                            current_app.logger.info(f"Existing image {existing_image.id} selected from gallery for new post.")
+                        else:
+                            flash('選択された画像を使用する権限がありません。', 'warning')
+                            current_app.logger.warning(f"ACCESS_DENIED: User {current_user.id} tried to use image {existing_image.id} owned by {existing_image.user_id}.")
+                    else:
+                        flash('選択された画像が見つかりませんでした。', 'warning')
+                        current_app.logger.warning(f"Selected image ID {selected_image_id_str} not found.")
+                except ValueError:
+                    flash('無効な画像IDが選択されました。', 'warning')
+                    current_app.logger.warning(f"Invalid image UUID format received: {selected_image_id_str}")
+            
+            # 投稿にメイン画像を割り当て
+            new_post.main_image = main_image_to_assign
+            # --- 画像処理ロジックここまで ---
+
+            db.session.add(new_post) # 投稿オブジェクトをセッションに追加
+            db.session.commit() # データベースにコミット
+            flash('新しい投稿が作成されました。', 'success')
+            current_app.logger.info(f"New post '{new_post.title}' created by user {current_user.id}.")
+            return redirect(url_for('posts.list_posts')) # 投稿作成後、一覧ページへリダイレクト
+        except Exception as e:
+            db.session.rollback() # エラー時はロールバック
+            flash(f'投稿の作成中にエラーが発生しました: {e}', 'danger')
+            current_app.logger.error(f"Error creating new post: {e}", exc_info=True)
+    
+    # GETリクエスト、またはPOSTでバリデーション失敗時にフォームをテンプレートに渡す
+    return render_template('posts/create_post.html', form=form)
+
+
+# 投稿編集
+@posts_bp.route('/edit_post/<uuid:post_id>', methods=['GET', 'POST'])
+@login_required
+def edit_post(post_id):
+    """
+    既存の投稿を編集します。
+    投稿の作成者またはadminロールのユーザーのみがアクセス可能です。
+    """
+    post = db.session.get(Post, post_id) # IDから投稿を取得
+    if post is None:
+        abort(404) # 投稿が見つからない場合は404エラー
+
+    # 権限チェック: 投稿者本人またはadminロールのみ編集可能
+    if post.user_id != current_user.id and current_user.role.name != 'admin':
+        flash('この投稿を編集する権限がありません。', 'danger')
+        current_app.logger.warning(f"ACCESS_DENIED: User {current_user.id} attempted to edit post {post_id} owned by {post.user_id}.")
+        abort(403) # 権限がない場合は403エラー
+
+    form = PostForm(obj=post) # 既存のpostオブジェクトでフォームを初期化
+
+    # GETリクエストの場合、フォームのフィールドに現在の投稿データをセット
+    # (obj=post でほとんど自動でセットされるが、SelectFieldやSelectMultipleField, FileFieldなどは別途処理が必要)
+    if request.method == 'GET':
+        # カテゴリの初期値設定: 既存のカテゴリがあればそのIDをセット、なければ空文字列をセット
+        if post.category:
+            form.category.data = str(post.category.id)
+        else:
+            form.category.data = '' # 「カテゴリなし」の選択肢に対応
+        
+        # タグの初期値設定: 既存のタグのIDリストをフォームにセット
+        form.tags.data = [str(tag.id) for tag in post.tags]
+
+    if form.validate_on_submit():
+        try:
+            post.title = form.title.data
+            post.content = form.content.data
+            # 最終更新日時を現在時刻 (UTC) に更新
+            post.updated_at = datetime.now(pytz.utc) 
+
+            # カテゴリの更新ロジック
+            # フォームから受け取ったカテゴリIDが空文字列の場合、category_idをNoneに設定
+            # そうでない場合は、UUIDに変換して設定
+            if form.category.data:
+                try:
+                    post.category_id = uuid.UUID(form.category.data)
+                except ValueError:
+                    flash('無効なカテゴリが選択されました。', 'warning')
+                    current_app.logger.warning(f"Invalid category UUID received on update: {form.category.data}")
+                    post.category_id = None # 無効な場合はNoneとする
+            else:
+                post.category_id = None # 「カテゴリなし」を選択した場合
+
+            # タグの更新ロジック: 既存のタグをクリアし、新しいタグを割り当て
+            post.tags.clear() # 現在のタグを全て削除
+            selected_tag_ids = form.tags.data # WTFormsから選択されたタグのUUID文字列のリストとして取得
+            if selected_tag_ids:
+                # 選択されたタグのIDに基づいてTagオブジェクトを取得
+                tags = Tag.query.filter(Tag.id.in_(selected_tag_ids)).all()
+                post.tags.extend(tags) # 新しいタグを追加
+
+            # メイン画像のアップロードと割り当てロジック
+            # 優先順位：新しいファイルがアップロードされた場合 > 既存の画像が選択された場合
+            main_image_to_assign = None
+
+            # 1. 新しいファイルがアップロードされた場合
+            if form.main_image_file.data and form.main_image_file.data.filename:
+                image_file = form.main_image_file.data
+                image_info = save_image_and_thumbnail(
+                    image_file,
+                    current_app.config['UPLOAD_FOLDER'],
+                    current_app.config['THUMBNAIL_FOLDER'],
+                    current_user.id
+                )
+                if image_info:
+                    # 古いメイン画像がある場合、ファイルとDBエントリを削除
+                    if post.main_image:
+                        try:
+                            old_unique_filename = post.main_image.unique_filename
+                            old_thumbnail_filename = post.main_image.thumbnail_filename
+                            delete_file(old_unique_filename, current_app.config['UPLOAD_FOLDER'])
+                            if old_thumbnail_filename:
+                                delete_file(old_thumbnail_filename, current_app.config['THUMBNAIL_FOLDER'])
+                            db.session.delete(post.main_image)
+                            db.session.flush() # 削除をコミット前にDBに反映
+                            current_app.logger.info(f"Old main image {old_unique_filename} for post {post_id} removed from disk and DB.")
+                        except Exception as e:
+                            current_app.logger.error(f"Error deleting old main image for post {post_id}: {e}", exc_info=True)
+                            # エラーがあっても処理は続行
+                            
+                    new_image_obj = Image(
+                        original_filename=image_info['original_filename'],
+                        unique_filename=image_info['unique_filename'],
+                        thumbnail_filename=image_info['thumbnail_filename'],
+                        filepath=image_info['filepath'],
+                        thumbnail_filepath=image_info['thumbnail_filepath'],
+                        user_id=image_info['user_id'],
+                        is_main_image=True
+                    )
+                    db.session.add(new_image_obj)
+                    db.session.flush() # IDを生成させる
+                    main_image_to_assign = new_image_obj
+                    current_app.logger.info(f"New main image {new_image_obj.id} uploaded and set for post {post_id}.")
+            
+            # 2. 新しいファイルがアップロードされず、既存の画像IDが指定された場合
+            # 'selected_image_id' はcreate_post.htmlからの隠しフィールド
+            elif request.form.get('selected_image_id'):
+                selected_image_id_str = request.form.get('selected_image_id')
+                try:
+                    selected_image_uuid = uuid.UUID(selected_image_id_str)
+                    existing_image = Image.query.filter_by(id=selected_image_uuid).first()
+
+                    if existing_image:
+                        # 権限チェック: 選択された画像が自身の画像であるか、またはadminロールであるか
+                        if existing_image.user_id == current_user.id or current_user.role.name == 'admin':
+                            main_image_to_assign = existing_image
+                            current_app.logger.info(f"Existing image {existing_image.id} selected from gallery for post {post_id}.")
+                            
+                            # 古いメイン画像が異なれば削除
+                            if post.main_image and post.main_image.id != existing_image.id:
+                                try:
+                                    old_unique_filename = post.main_image.unique_filename
+                                    old_thumbnail_filename = post.main_image.thumbnail_filename
+                                    delete_file(old_unique_filename, current_app.config['UPLOAD_FOLDER'])
+                                    if old_thumbnail_filename:
+                                        delete_file(old_thumbnail_filename, current_app.config['THUMBNAIL_FOLDER'])
+                                    db.session.delete(post.main_image)
+                                    db.session.flush()
+                                    current_app.logger.info(f"Old main image {old_unique_filename} for post {post_id} removed (replaced by gallery image).")
+                                except Exception as e:
+                                    current_app.logger.error(f"Error deleting old main image for post {post_id} when replaced by gallery image: {e}", exc_info=True)
+                        else:
+                            flash('選択された画像を使用する権限がありません。', 'warning')
+                            current_app.logger.warning(f"ACCESS_DENIED: User {current_user.id} tried to use image {existing_image.id} owned by {existing_image.user_id}.")
+                            # ここで main_image_to_assign は None のままなので、既存画像は変更されない
+                    else:
+                        flash('選択された画像が見つかりませんでした。', 'warning')
+                        current_app.logger.warning(f"Selected image ID {selected_image_id_str} not found on update.")
+                except ValueError:
+                    flash('無効な画像IDが選択されました。', 'warning')
+                    current_app.logger.warning(f"Invalid image UUID format received on update: {selected_image_id_str}")
+
+            # 3. どちらも指定されていない場合、または選択解除された場合
+            # 'clearSelectedImage' ボタンが押されたことを意味する
+            # (selected_image_id が空で、かつ main_image_file もない場合)
+            elif not request.form.get('selected_image_id') and \
+                 not (form.main_image_file.data and form.main_image_file.data.filename):
+                # 既存のメイン画像があれば削除
+                if post.main_image:
+                    try:
+                        old_unique_filename = post.main_image.unique_filename
+                        old_thumbnail_filename = post.main_image.thumbnail_filename
+                        delete_file(old_unique_filename, current_app.config['UPLOAD_FOLDER'])
+                        if old_thumbnail_filename:
+                            delete_file(old_thumbnail_filename, current_app.config['THUMBNAIL_FOLDER'])
+                        db.session.delete(post.main_image)
+                        db.session.flush()
+                        current_app.logger.info(f"Main image for post {post_id} explicitly cleared and removed from disk and DB.")
+                    except Exception as e:
+                        current_app.logger.error(f"Error clearing main image for post {post_id}: {e}", exc_info=True)
+                main_image_to_assign = None # メイン画像をNoneにする
+
+            # 投稿にメイン画像を割り当て (最終的な割り当て)
+            post.main_image = main_image_to_assign
+            # --- 画像処理ロジックここまで ---
+
+            db.session.commit() # データベースに変更をコミット
+            flash('投稿が更新されました。', 'success')
+            current_app.logger.info(f"Post '{post.title}' ({post_id}) updated successfully by user {current_user.id}.")
+            return redirect(url_for('posts.list_posts')) # 更新後、投稿一覧ページへリダイレクト
+        except Exception as e:
+            db.session.rollback() # エラー時はロールバック
+            flash(f'投稿の更新中にエラーが発生しました: {e}', 'danger')
+            current_app.logger.error(f"Error updating post {post_id}: {e}", exc_info=True)
+    
+    # GETリクエスト、またはPOSTでバリデーション失敗時にフォームと投稿をテンプレートに渡す
+    return render_template('/posts/edit_post.html', form=form, post=post)
+
+# 投稿削除
+@posts_bp.route('/delete_post/<uuid:post_id>', methods=['POST'])
+@login_required
+def delete_post(post_id):
+    """
+    投稿を削除します。
+    投稿の作成者またはadminロールのユーザーのみがアクセス可能です。
+    関連するメイン画像も削除します。
+    """
+    post = db.session.get(Post, post_id) # IDから投稿を取得
+    if post is None:
+        abort(404) # 投稿が見つからない場合は404エラー
+
+    # 権限チェック: 投稿者本人またはadminロールのみ削除可能
+    if post.user_id != current_user.id and current_user.role.name != 'admin':
+        flash('この投稿を削除する権限がありません。', 'danger')
+        current_app.logger.warning(f"ACCESS_DENIED: User {current_user.id} attempted to delete post {post_id} owned by {post.user_id}.")
+        abort(403) # 権限がない場合は403エラー
+
+    try:
+        # メイン画像のファイルとDBエントリを削除
+        if post.main_image:
+            # 削除前にファイル名を保持
+            unique_filename_to_delete = post.main_image.unique_filename
+            thumbnail_filename_to_delete = post.main_image.thumbnail_filename
+
+            delete_file(unique_filename_to_delete, current_app.config['UPLOAD_FOLDER'])
+            if thumbnail_filename_to_delete:
+                delete_file(thumbnail_filename_to_delete, current_app.config['THUMBNAIL_FOLDER'])
+            
+            db.session.delete(post.main_image) # DBからImageエントリを削除
+            current_app.logger.info(f"Main image {post.main_image.id} for post {post_id} deleted from disk and DB.")
+        
+        # 投稿に紐付く埋め込み画像も削除するロジックが必要であればここに追加
+        # 例えば、Postモデルに Images リレーションシップがあれば以下のようになる
+        # for img in post.images:
+        #     delete_file(img.unique_filename, current_app.config['UPLOAD_FOLDER'])
+        #     if img.thumbnail_filename:
+        #         delete_file(img.thumbnail_filename, current_app.config['THUMBNAIL_FOLDER'])
+        #     db.session.delete(img)
+        # current_app.logger.info(f"All associated images for post {post_id} deleted.")
+
+        db.session.delete(post) # 投稿オブジェクトを削除
+        db.session.commit() # データベースに変更をコミット
+        flash('投稿が正常に削除されました。', 'success')
+        current_app.logger.info(f"Post {post_id} deleted successfully by user {current_user.id}.")
+    except Exception as e:
+        db.session.rollback() # エラー時はロールバック
+        flash(f'投稿の削除中にエラーが発生しました: {e}', 'danger')
+        current_app.logger.error(f"Error deleting post {post_id}: {e}", exc_info=True)
+    
+    return redirect(url_for('posts.list_posts')) # 投稿削除後、一覧ページへリダイレクト
+
+# 投稿詳細表示 (公開されている投稿のみ)
+# このルートは admin/posts/post/<uuid> のパスを持つため、公開用として適切ではないかもしれません。
+# 一般ユーザー向けの投稿詳細表示は別のBlueprint (例: home_bp) に定義するのが一般的です。
+@posts_bp.route('/post/<uuid:post_id>')
+def post_detail(post_id):
+    """
+    指定されたIDの投稿詳細を表示します。
+    """
+    # selectinloadを使って関連データを効率的にロード
+    post = Post.query.options(
+        selectinload(Post.main_image), # メイン画像情報をまとめてロード
+        selectinload(Post.posted_by), # 投稿者情報をまとめてロード
+        selectinload(Post.category),  # カテゴリ情報をまとめてロード
+        selectinload(Post.tags)      # タグ情報をまとめてロード
+    ).get_or_404(post_id) # 投稿が見つからない場合は404エラー
+
+    main_image_url = None
+    if post.main_image:
+        # Imageモデルのurlプロパティを使用 (サムネイルがあればサムネイルを優先)
+        main_image_url = post.main_image.thumbnail_url or post.main_image.url 
+    else:
+        # デフォルト画像へのパス (staticフォルダ内の画像)
+        # static/images/no_image.png のパスは存在しないため、
+        # ここではプレースホルダーを直接使うか、
+        # あるいは /static/uploads/images/ の下に no_image.png を配置し、
+        # url_for('static', filename='uploads/images/no_image.png') のように参照すべき
+        # テンプレート側で 'No Image' のプレースホルダーを表示するロジックに依存
+        main_image_url = url_for('static', filename='images/no_image.png') # 適切なデフォルト画像を設定 (パスは後で要調整)
+
+    return render_template('posts/post_detail.html', post=post, main_image_url=main_image_url)
+
+
+# 投稿の公開/非公開切り替え
+@posts_bp.route('/toggle_publish/<uuid:post_id>', methods=['POST'])
+@login_required
+def toggle_publish(post_id):
+    """
+    指定された投稿の公開状態を切り替えます。
+    投稿の作成者またはadminロールのユーザーのみがアクセス可能です。
+    """
+    post = db.session.get(Post, post_id) # IDから投稿を取得
+    if post is None:
+        abort(404) # 投稿が見つからない場合は404エラー
+
+    # 権限チェック: 投稿者本人またはadminロールのみ切り替え可能
+    if post.user_id != current_user.id and current_user.role.name != 'admin':
+        flash('この投稿の公開状態を変更する権限がありません。', 'danger')
+        current_app.logger.warning(f"ACCESS_DENIED: User {current_user.id} attempted to toggle publish status for post {post_id} owned by {post.user_id}.")
+        abort(403) # 権限がない場合は403エラー
+
+    try:
+        post.is_published = not post.is_published # 公開状態を反転
+        db.session.commit() # データベースにコミット
+        flash(f"投稿が{'公開' if post.is_published else '下書き'}状態になりました。", 'success')
+        current_app.logger.info(f"Publish status for post '{post.title}' ({post_id}) toggled to {post.is_published} by user {current_user.id}.")
+    except Exception as e:
+        db.session.rollback() # エラー時はロールバック
+        flash(f"投稿の公開状態の変更中にエラーが発生しました: {e}", 'danger')
+        current_app.logger.error(f"Error toggling publish status for post {post_id}: {e}", exc_info=True)
+
+    return redirect(url_for('posts.list_posts')) # 投稿公開状態変更後、一覧ページへリダイレクト
+----------------------------------------------------------------------
+# F:\dev\BrogDev\app\admin\routes.py　⇒app/routes/admin.py　相当か？？？
+
+from flask import Blueprint, render_template, request, flash, redirect, url_for, current_app, abort
+from flask_login import login_required, current_user
+from app.models import User, Role, Image, Post # モデルのインポートを確認
+from app.extensions import db
+from app.forms import UserForm, RoleForm, PostForm # フォームのインポートを確認
+# ★★★ここが修正点★★★
+from app.utils import allowed_file, save_image_and_thumbnail, delete_file # 'delete_file_from_uploads' を 'delete_file' に修正
+import os
+from datetime import datetime
+import uuid # UUIDを使う場合
+
+import logging
+
+logger = logging.getLogger(__name__)
+
+# Blueprintの定義
+admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
+
+# --- ユーザー管理ルート ---
+# 管理画面のトップページ (admin.indexエンドポイント)
+@admin_bp.route('/')
+@admin_bp.route('/index') # どちらか一方でも良いし、両方定義して /admin と /admin/index の両方でアクセスできるようにしても良い
+@login_required # 必要であればログイン必須にする
+# @admin_required # 必要であればカスタムデコレータで管理者権限を要求する
+def index():
+    # ここに管理画面トップページのロジックを追加
+    # 例: 統計情報、最新の投稿など
+    return render_template('admin/index.html', title='管理ダッシュボード') # 仮のテンプレート名
+
+@admin_bp.route('/users')
+@login_required
+def manage_users():
+    # 管理者のみアクセス可能
+    if not current_user.is_authenticated or \
+       not hasattr(current_user, 'role') or \
+       not current_user.role or \
+       current_user.role.name != 'admin':
+        flash('この操作を行う権限がありません。', 'danger')
+        current_app.logger.warning(f"ACCESS_DENIED: User {current_user.id if current_user.is_authenticated else 'Anonymous'} attempted to access manage_users without admin role.")
+        abort(403)
+        
+    users = User.query.all()
+    return render_template('admin/manage_users.html', users=users) # テンプレートパスを修正
+
+@admin_bp.route('/users/edit/<uuid:user_id>', methods=['GET', 'POST'])
+@login_required
+def edit_user(user_id):
+    # 管理者のみアクセス可能
+    if not current_user.is_authenticated or \
+       not hasattr(current_user, 'role') or \
+       not current_user.role or \
+       current_user.role.name != 'admin':
+        flash('この操作を行う権限がありません。', 'danger')
+        current_app.logger.warning(f"ACCESS_DENIED: User {current_user.id} attempted to edit user {user_id} without admin role.")
+        abort(403)
+
+    user = db.session.get(User, user_id)
+    if user is None:
+        abort(404)
+
+    form = UserForm(obj=user) # 既存のユーザーデータでフォームを初期化
+
+    if form.validate_on_submit():
+        try:
+            user.username = form.username.data
+            user.email = form.email.data
+            # パスワードが入力された場合のみ更新
+            if form.password.data:
+                user.set_password(form.password.data) # set_password メソッドがあることを想定
+            
+            # ロールを更新 (フォームにrole_idがあることを想定)
+            if form.role_id.data:
+                user.role_id = form.role_id.data
+
+            db.session.commit()
+            flash('ユーザー情報が正常に更新されました。', 'success')
+            return redirect(url_for('admin.manage_users'))
+        except Exception as e:
+            db.session.rollback()
+            flash(f'ユーザー情報の更新中にエラーが発生しました: {e}', 'danger')
+            current_app.logger.error(f"Error updating user {user_id}: {e}", exc_info=True)
+    
+    # ロール選択肢をフォームに渡す
+    form.role_id.choices = [(str(role.id), role.name) for role in Role.query.all()]
+    
+    return render_template('admin/edit_user.html', form=form, user=user) # テンプレートパスを修正
+
+@admin_bp.route('/users/delete/<uuid:user_id>', methods=['POST'])
+@login_required
+def delete_user(user_id):
+    # 管理者のみアクセス可能
+    if not current_user.is_authenticated or \
+       not hasattr(current_user, 'role') or \
+       not current_user.role or \
+       current_user.role.name != 'admin':
+        flash('この操作を行う権限がありません。', 'danger')
+        current_app.logger.warning(f"ACCESS_DENIED: User {current_user.id} attempted to delete user {user_id} without admin role.")
+        abort(403)
+
+    user = db.session.get(User, user_id)
+    if user is None:
+        abort(404)
+
+    # 自身のユーザーは削除できないようにする（任意）
+    if user.id == current_user.id:
+        flash('自分自身のユーザーは削除できません。', 'danger')
+        return redirect(url_for('admin.manage_users'))
+
+    try:
+        # ユーザーに関連する投稿を削除
+        posts = Post.query.filter_by(user_id=user.id).all()
+        for post in posts:
+            # 投稿に関連する画像を削除 (もしあれば)
+            if post.main_image:
+                delete_file(post.main_image.unique_filename, current_app.config['UPLOAD_FOLDER'])
+                if post.main_image.thumbnail_filename:
+                    delete_file(post.main_image.thumbnail_filename, current_app.config['THUMBNAIL_FOLDER'])
+                db.session.delete(post.main_image)
+                logger.info(f"Deleted image {post.main_image.id} for post {post.id} by user {user_id}.")
+            db.session.delete(post)
+            logger.info(f"Deleted post {post.id} by user {user_id}.")
+
+        # ユーザーに関連する画像も削除
+        images = Image.query.filter_by(user_id=user.id).all()
+        for image in images:
+            delete_file(image.unique_filename, current_app.config['UPLOAD_FOLDER'])
+            if image.thumbnail_filename:
+                delete_file(image.thumbnail_filename, current_app.config['THUMBNAIL_FOLDER'])
+            db.session.delete(image)
+            logger.info(f"Deleted image {image.id} by user {user_id}.")
+
+
+        db.session.delete(user)
+        db.session.commit()
+        flash('ユーザーが正常に削除されました。', 'success')
+        current_app.logger.info(f"User {user_id} deleted successfully by admin {current_user.id}.")
+    except Exception as e:
+        db.session.rollback()
+        flash(f'ユーザーの削除中にエラーが発生しました: {e}', 'danger')
+        current_app.logger.error(f"Error deleting user {user_id}: {e}", exc_info=True)
+
+    return redirect(url_for('admin.manage_users'))
+
+
+# --- ロール管理ルート ---
+
+@admin_bp.route('/roles')
+@login_required
+def manage_roles():
+    # 管理者のみアクセス可能
+    if not current_user.is_authenticated or \
+       not hasattr(current_user, 'role') or \
+       not current_user.role or \
+       current_user.role.name != 'admin':
+        flash('この操作を行う権限がありません。', 'danger')
+        current_app.logger.warning(f"ACCESS_DENIED: User {current_user.id if current_user.is_authenticated else 'Anonymous'} attempted to access manage_roles without admin role.")
+        abort(403)
+    
+    roles = Role.query.all()
+    return render_template('admin/manage_roles.html', roles=roles) # テンプレートパスを修正
+
+@admin_bp.route('/roles/new', methods=['GET', 'POST'])
+@login_required
+def new_role():
+    # 管理者のみアクセス可能
+    if not current_user.is_authenticated or \
+       not hasattr(current_user, 'role') or \
+       not current_user.role or \
+       current_user.role.name != 'admin':
+        flash('この操作を行う権限がありません。', 'danger')
+        current_app.logger.warning(f"ACCESS_DENIED: User {current_user.id if current_user.is_authenticated else 'Anonymous'} attempted to create new_role without admin role.")
+        abort(403)
+
+    form = RoleForm() # RoleFormがあることを想定
+    if form.validate_on_submit():
+        try:
+            new_role = Role(name=form.name.data)
+            db.session.add(new_role)
+            db.session.commit()
+            flash(f'ロール "{new_role.name}" が正常に作成されました。', 'success')
+            return redirect(url_for('admin.manage_roles'))
+        except Exception as e:
+            db.session.rollback()
+            flash(f'ロールの作成中にエラーが発生しました: {e}', 'danger')
+            current_app.logger.error(f"Error creating new role: {e}", exc_info=True)
+    
+    return render_template('admin/create_role.html', form=form) # テンプレートパスを修正
+
+
+@admin_bp.route('/roles/edit/<uuid:role_id>', methods=['GET', 'POST'])
+@login_required
+def edit_role(role_id):
+    # 管理者のみアクセス可能
+    if not current_user.is_authenticated or \
+       not hasattr(current_user, 'role') or \
+       not current_user.role or \
+       current_user.role.name != 'admin':
+        flash('この操作を行う権限がありません。', 'danger')
+        current_app.logger.warning(f"ACCESS_DENIED: User {current_user.id} attempted to edit role {role_id} without admin role.")
+        abort(403)
+
+    role = db.session.get(Role, role_id)
+    if role is None:
+        abort(404)
+
+    form = RoleForm(obj=role)
+    if form.validate_on_submit():
+        try:
+            role.name = form.name.data
+            db.session.commit()
+            flash(f'ロール "{role.name}" が正常に更新されました。', 'success')
+            return redirect(url_for('admin.manage_roles'))
+        except Exception as e:
+            db.session.rollback()
+            flash(f'ロールの更新中にエラーが発生しました: {e}', 'danger')
+            current_app.logger.error(f"Error updating role {role_id}: {e}", exc_info=True)
+            
+    return render_template('admin/edit_role.html', form=form, role=role) # テンプレートパスを修正
+
+@admin_bp.route('/roles/delete/<uuid:role_id>', methods=['POST'])
+@login_required
+def delete_role(role_id):
+    # 管理者のみアクセス可能
+    if not current_user.is_authenticated or \
+       not hasattr(current_user, 'role') or \
+       not current_user.role or \
+       current_user.role.name != 'admin':
+        flash('この操作を行う権限がありません。', 'danger')
+        current_app.logger.warning(f"ACCESS_DENIED: User {current_user.id} attempted to delete role {role_id} without admin role.")
+        abort(403)
+
+    role = db.session.get(Role, role_id)
+    if role is None:
+        abort(404)
+
+    # 削除しようとしているロールが現在どのユーザーにも割り当てられていないことを確認
+    # または、割り当てられているユーザーのロールをデフォルトなどに変更するロジックが必要
+    # ここでは、割り当てられているユーザーが存在する場合は削除を許可しない例
+    if role.users: # Roleモデルにusersリレーションがあることを想定
+        flash('このロールに割り当てられているユーザーが存在するため、削除できません。', 'danger')
+        return redirect(url_for('admin.manage_roles'))
+
+    try:
+        db.session.delete(role)
+        db.session.commit()
+        flash('ロールが正常に削除されました。', 'success')
+        current_app.logger.info(f"Role {role_id} deleted successfully.")
+    except Exception as e:
+        db.session.rollback()
+        flash(f'ロールの削除中にエラーが発生しました: {e}', 'danger')
+        current_app.logger.error(f"Error deleting role {role_id}: {e}", exc_info=True)
+    
+    return redirect(url_for('admin.manage_roles'))
+=========================================
