@@ -1,0 +1,43 @@
+# Python 仮想環境
+# よく使われる仮想環境のディレクトリ名
+FlaskEnv/
+
+# Pythonバイトコード
+__pycache__/
+*.pyc
+*.pyo
+
+# ログファイル
+*.log
+logs/
+
+migrations/
+backup/
+static/
+tests/
+
+instance/
+
+# 環境変数ファイル（機密情報を含むことが多い）
+#.env # .envファイル自体を除外する場合
+
+# パッケージ管理ツール関連
+#pip-wheel-metadata/
+#.pip-modules/
+
+# 開発ツールやIDEの設定ファイル（任意）
+#.vscode/           # VS Codeの設定ファイル（共有しない場合）
+#.idea/             # PyCharmなどのJetBrains系IDEの設定
+#*.sublime-project  # Sublime Textのプロジェクトファイル
+#*.sublime-workspace # Sublime Textのワークスペースファイル
+
+# OS関連のファイル
+#.DS_Store          # macOSのディレクトリ情報ファイル
+#Thumbs.db          # Windowsのサムネイルキャッシュ
+
+# その他の出力ファイル
+#dist/              # ビルド成果物
+#build/             # ビルド中間ファイル
+#*.egg-info/        # Pythonパッケージのメタデータ
+#.pytest_cache/     # pytestのキャッシュ
+#htmlcov/           # カバレッジレポート

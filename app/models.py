@@ -1,22 +1,20 @@
-# F:\dev\BrogDev\app\models.py
+# F:\dev\BrogDev\app\models.py (修正版)
 
 import uuid
 from datetime import datetime
 from flask_login import UserMixin
-from sqlalchemy.dialects.postgresql import UUID 
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.schema import PrimaryKeyConstraint, UniqueConstraint
 import pytz
 from app.extensions import db
 
 from sqlalchemy_utils import UUIDType
-from sqlalchemy.orm import relationship 
+from sqlalchemy.orm import relationship
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask import url_for, current_app
 
 
 # 多対多のリレーションシップ用ヘルパーテーブル
-# post_tags テーブル名は大文字小文字を区別せず、単数形にすることが一般的だが、
-# ここでは既存の定義に合わせる (post_tags)
 post_tags = db.Table(
     'post_tags',
     db.Column('post_id', UUIDType(binary=False), db.ForeignKey('post.id'), primary_key=True),
@@ -24,7 +22,6 @@ post_tags = db.Table(
 )
 
 # Post と Additional_Images の多対多リレーションシップのための結合テーブル
-# この部分が、これまでのエラー解決に不可欠でした。
 post_additional_images = db.Table(
     'post_additional_images', # 結合テーブルの名前
     db.Column('post_id', UUIDType(binary=False), db.ForeignKey('post.id'), primary_key=True),
@@ -37,7 +34,7 @@ class Role(db.Model):
     アプリケーションにおけるユーザーの役割を表し、権限やアクセスレベルを定義します。
     """
     __tablename__ = 'role'
-    id = db.Column(db.Integer, primary_key=True) 
+    id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(64), unique=True, nullable=False)
     description = db.Column(db.String(256), nullable=True)
 
@@ -62,11 +59,14 @@ class User(UserMixin, db.Model):
 
     role = relationship('Role', backref=db.backref('users', lazy='dynamic'))
 
-    posts = relationship('Post', backref='posted_by', lazy='dynamic', cascade='all, delete-orphan')
+    posts = relationship('Post', back_populates='posted_by', lazy='dynamic', cascade='all, delete-orphan')
     categories = relationship('Category', backref='user', lazy='dynamic', cascade='all, delete-orphan')
     tags = relationship('Tag', backref='user', lazy='dynamic', cascade='all, delete-orphan')
     uploaded_images = relationship('Image', back_populates='uploader', lazy='dynamic', cascade='all, delete-orphan')
-    comments = relationship('Comment', backref='comment_author', lazy='dynamic', cascade='all, delete-orphan')
+    
+    # ★★★ 修正点 1 ★★★
+    # backref を back_populates に変更し、Comment.comment_author との双方向関係を明示
+    comments = relationship('Comment', back_populates='comment_author', lazy='dynamic', cascade='all, delete-orphan')
 
     @property
     def is_admin(self):
@@ -110,7 +110,8 @@ class Category(db.Model):
 
     __table_args__ = (UniqueConstraint('name', 'user_id', name='_category_name_user_id_uc'),
                       UniqueConstraint('slug', 'user_id', name='_category_slug_user_id_uc'))
-    posts = relationship('Post', backref='category', lazy='dynamic')
+    
+    posts = relationship('Post', back_populates='category', lazy='dynamic')
 
     def __repr__(self):
         return f'<Category {self.name}>'
@@ -143,32 +144,23 @@ class Image(db.Model):
     __tablename__ = 'image' 
     id = db.Column(UUIDType(binary=False), primary_key=True, default=uuid.uuid4) 
     original_filename = db.Column(db.String(255), nullable=False)
-    # unique_filename が実質的なファイル名として機能
     unique_filename = db.Column(db.String(255), unique=True, nullable=False)
     thumbnail_filename = db.Column(db.String(255), nullable=True) 
-    filepath = db.Column(db.String(500), nullable=False) # サーバ上の絶対パスまたは相対パス（推奨）
-    thumbnail_filepath = db.Column(db.String(500), nullable=True) # サーバ上の絶対パスまたは相対パス（推奨）
+    filepath = db.Column(db.String(500), nullable=False)
+    thumbnail_filepath = db.Column(db.String(500), nullable=True)
     uploaded_at = db.Column(db.DateTime, default=lambda: datetime.now(pytz.utc))
     user_id = db.Column(UUIDType(binary=False), db.ForeignKey('user.id'), nullable=False) 
-    # is_main_image はPostのmain_image_idで管理されるため、このImageモデルでは不要かもしれません
-    # ただし、特定のImageが現在どこかの投稿のメイン画像であるかどうかを素早くチェックしたい場合は維持しても良い
     is_main_image = db.Column(db.Boolean, default=False) 
     alt_text = db.Column(db.String(255), nullable=True) 
 
-    # 埋め込み画像としてPostに紐づくための外部キー
     post_id = db.Column(UUIDType(binary=False), db.ForeignKey('post.id'), nullable=True) 
 
-    # リレーションシップ
     uploader = relationship('User', back_populates='uploaded_images') 
-
-    # Imageが紐づくPostへのリレーションシップ（埋め込み画像の場合）
-    # foreign_keys: このリレーションシップがImage.post_idを参照することを明示
     post = relationship('Post', back_populates='images', foreign_keys=[post_id]) 
 
     @property
     def url(self):
         """画像の公開URLを生成します。"""
-        # unique_filename を使ってURLを生成
         if current_app:
             return url_for('static', filename=f'uploads/images/{self.unique_filename}')
         return f'/static/uploads/images/{self.unique_filename}'
@@ -181,8 +173,6 @@ class Image(db.Model):
             if current_app:
                 return url_for('static', filename=f'uploads/thumbnails/{self.thumbnail_filename}')
             return f'/static/uploads/thumbnails/{self.thumbnail_filename}'
-        # サムネイルがない場合はフルサイズの画像のURLを返すか、Noneを返すかは要件による
-        # 今回はNoneを返す（テンプレート側でNoneチェックが必要）
         return None 
 
     def __repr__(self):
@@ -202,42 +192,36 @@ class Post(db.Model):
     updated_at = db.Column(db.DateTime, default=lambda: datetime.now(pytz.utc), onupdate=lambda: datetime.now(pytz.utc), nullable=False)
     is_published = db.Column(db.Boolean, default=False, nullable=False)
 
-    user_id = db.Column(UUIDType(binary=False), db.ForeignKey('user.id'), nullable=False) # 投稿者
-    category_id = db.Column(UUIDType(binary=False), db.ForeignKey('category.id'), nullable=True) # 所属カテゴリ (オプション)
-    
-    # メイン画像ID - unique=True を維持（一つの画像は一つの投稿のメイン画像にしかなれない）
+    user_id = db.Column(UUIDType(binary=False), db.ForeignKey('user.id'), nullable=False)
+    category_id = db.Column(UUIDType(binary=False), db.ForeignKey('category.id'), nullable=True)
     main_image_id = db.Column(UUIDType(binary=False), db.ForeignKey('image.id'), unique=True, nullable=True) 
 
-    # PostとImageの一対一リレーションシップ (main_image)
+    # リレーションシップ
+    posted_by = relationship('User', back_populates='posts')
+    category = relationship('Category', back_populates='posts')
     main_image = relationship(
         'Image', 
-        backref=db.backref('post_as_main_image', uselist=False), # uselist=False で一対一を明示
-        foreign_keys=[main_image_id], # main_image_id を参照
-        post_update=True # 循環参照の警告回避のため
+        backref=db.backref('post_as_main_image', uselist=False),
+        foreign_keys=[main_image_id],
+        post_update=True
     )
-    # backref='post_as_main_image' により、Imageオブジェクト (img) から img.post_as_main_image でPostオブジェクトにアクセス可能
-
-    # PostとImageの一対多リレーションシップ（埋め込み画像）
-    # Imageモデルのpost_idを参照し、back_populates='post'と整合させる
-    # 'images' はこの投稿に埋め込まれた画像全てを指す
     images = relationship(
         'Image',
-        primaryjoin="Post.id == Image.post_id", # このPostのIDがImageのpost_idと一致
-        back_populates='post', # Imageモデルの'post'リレーションシップと結合
-        foreign_keys=[Image.post_id], # Image.post_idを外部キーとして指定
-        cascade='all, delete-orphan' # Postが削除されたら関連する埋め込み画像も削除
+        primaryjoin="Post.id == Image.post_id",
+        back_populates='post',
+        foreign_keys=[Image.post_id],
+        cascade='all, delete-orphan'
     )
-
     tags = relationship('Tag', secondary=post_tags, backref=db.backref('posts', lazy='dynamic'))
-
-    # ★★★ 追加した additional_images リレーションシップ ★★★
     additional_images = relationship(
         'Image',
-        secondary=post_additional_images, # 上部で定義した結合テーブルの名前を指定
+        secondary=post_additional_images,
         backref=db.backref('posts_as_additional_image', lazy='dynamic')
     )
-
-    comments = relationship('Comment', lazy='dynamic', cascade='all, delete-orphan')
+    
+    # ★★★ 修正点 2 ★★★
+    # back_populates を追加し、Comment.post との双方向関係を明示
+    comments = relationship('Comment', back_populates='post', lazy='dynamic', cascade='all, delete-orphan')
 
     def __repr__(self):
         return f'<Post {self.title}>'
@@ -249,7 +233,7 @@ class Comment(db.Model):
     __tablename__ = 'comment'
     id = db.Column(UUIDType(binary=False), primary_key=True, default=uuid.uuid4)
     body = db.Column(db.Text, nullable=False)
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow, nullable=False) # pytz.utc を使用するように変更
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(pytz.utc), nullable=False)
     updated_at = db.Column(db.DateTime, default=lambda: datetime.now(pytz.utc), onupdate=lambda: datetime.now(pytz.utc), nullable=False)
     is_approved = db.Column(db.Boolean, default=False, nullable=False)
@@ -257,9 +241,11 @@ class Comment(db.Model):
     user_id = db.Column(UUIDType(binary=False), db.ForeignKey('user.id'), nullable=False) 
     post_id = db.Column(UUIDType(binary=False), db.ForeignKey('post.id'), nullable=False) 
 
-    # リレーションシップ
-    user = db.relationship('User', lazy='select')
-    post = db.relationship('Post', lazy='select')
+    # ★★★ 修正点 3 ★★★
+    # 競合していた 'user' relationship を削除し、'comment_author' と 'post' に
+    # back_populates を設定して双方向関係を確立
+    comment_author = relationship('User', back_populates='comments')
+    post = relationship('Post', back_populates='comments')
     
     def __repr__(self):
         return f'<Comment {self.id} on Post {self.post_id}>'
