@@ -15,7 +15,7 @@
         {% endif %}
     {% endwith %}
 
-    <form action="{{ url_for('admin.bulk_upload_images') }}" method="POST" enctype="multipart/form-data">
+    <form action="{{ url_for('blog_admin_bp.bulk_upload_images') }}" method="POST" enctype="multipart/form-data">
         {{ form.csrf_token }} {# Flask-WTF を使用する場合、CSRFトークンが必要です #}
         
         <div class="mb-3">
@@ -31,7 +31,7 @@
         </div>
 
         {{ form.submit(class="btn btn-primary") }} {# アップロードボタン #}
-        <a href="{{ url_for('admin.list_images') }}" class="btn btn-secondary">キャンセル</a>
+        <a href="{{ url_for('blog_admin_bp.list_images') }}" class="btn btn-secondary">キャンセル</a>
     </form>
 </div>
 {% endblock %}

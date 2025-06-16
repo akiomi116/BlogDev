@@ -52,16 +52,16 @@
                             <i class="fas fa-tools me-1"></i> 管理
                         </a>
                         <ul class="dropdown-menu" aria-labelledby="adminNavbarDropdown">
-                            <li><a class="dropdown-item" href="{{ url_for('admin.index') }}"><i class="fas fa-chart-line me-2"></i> 管理ダッシュボード</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('blog_admin_bp.index') }}"><i class="fas fa-chart-line me-2"></i> 管理ダッシュボード</a></li>
                             <li><hr class="dropdown-divider"></li>
                             {# 以下、Flask-Admin ModelView の各リンク #}
-                            <li><a class="dropdown-item" href="{{ url_for('post.index_view') }}"><i class="fas fa-blog me-2"></i> 投稿管理</a></li>
-                            <li><a class="dropdown-item" href="{{ url_for('category.index_view') }}"><i class="fas fa-sitemap me-2"></i> カテゴリ管理</a></li>
-                            <li><a class="dropdown-item" href="{{ url_for('tag.index_view') }}"><i class="fas fa-tags me-2"></i> タグ管理</a></li>
-                            <li><a class="dropdown-item" href="{{ url_for('comment.index_view') }}"><i class="fas fa-comments me-2"></i> コメント管理</a></li>
-                            <li><a class="dropdown-item" href="{{ url_for('image.index_view') }}"><i class="fas fa-image me-2"></i> 画像管理</a></li>
-                            <li><a class="dropdown-item" href="{{ url_for('user.index_view') }}"><i class="fas fa-users-cog me-2"></i> ユーザー管理</a></li>
-                            <li><a class="dropdown-item" href="{{ url_for('role.index_view') }}"><i class="fas fa-user-tag me-2"></i> ロール管理</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('blog_admin_bp.list_posts') }}"><i class="fas fa-blog me-2"></i> 投稿管理</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('blog_admin_bp.manage_categories') }}"><i class="fas fa-sitemap me-2"></i> カテゴリ管理</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('blog_admin_bp.manage_tags') }}"><i class="fas fa-tags me-2"></i> タグ管理</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('blog_admin_bp.list_comments') }}"><i class="fas fa-comments me-2"></i> コメント管理</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('blog_admin_bp.list_images') }}"><i class="fas fa-image me-2"></i> 画像管理</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('blog_admin_bp.manage_users') }}"><i class="fas fa-users-cog me-2"></i> ユーザー管理</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('blog_admin_bp.manage_roles') }}"><i class="fas fa-user-tag me-2"></i> ロール管理</a></li>
                         </ul>
                     </li>
                     {% endif %}
@@ -81,23 +81,23 @@
                             </a>
                             <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarDropdown">
                                 {# プロフィールリンクは共通 #}
-                                <li><a class="dropdown-item" href="{{ url_for('admin.index') }}"><i class="fas fa-user me-2"></i> プロフィール</a></li>
+                                <li><a class="dropdown-item" href="{{ url_for('blog_admin_bp.index') }}"><i class="fas fa-user me-2"></i> プロフィール</a></li>
                                 
                                 {# 管理者ロールを持つユーザーのみに表示される管理メニュー #}
                                 {% if current_user.is_authenticated and current_user.role and current_user.role.name == 'admin' %}
                                     <li><hr class="dropdown-divider"></li>
                                     <li><h6 class="dropdown-header">管理メニュー</h6></li>
-                                    <li><a class="dropdown-item" href="{{ url_for('admin.index') }}"><i class="fas fa-chart-line me-2"></i> 管理ダッシュボード</a></li>
+                                    <li><a class="dropdown-item" href="{{ url_for('blog_admin_bp.index') }}"><i class="fas fa-chart-line me-2"></i> 管理ダッシュボード</a></li>
                                     <li><hr class="dropdown-divider"></li>
                                     
                                     {# ここもFlask-Admin ModelView の各リンク #}
-                                    <li><a class="dropdown-item" href="{{ url_for('post.index_view') }}"><i class="fas fa-blog me-2"></i> 投稿管理</a></li>
-                                    <li><a class="dropdown-item" href="{{ url_for('category.index_view') }}"><i class="fas fa-sitemap me-2"></i> カテゴリ管理</a></li>
-                                    <li><a class="dropdown-item" href="{{ url_for('tag.index_view') }}"><i class="fas fa-tags me-2"></i> タグ管理</a></li>
-                                    <li><a class="dropdown-item" href="{{ url_for('comment.index_view') }}"><i class="fas fa-comments me-2"></i> コメント管理</a></li>
-                                    <li><a class="dropdown-item" href="{{ url_for('image.index_view') }}"><i class="fas fa-image me-2"></i> 画像管理</a></li>
-                                    <li><a class="dropdown-item" href="{{ url_for('user.index_view') }}"><i class="fas fa-users-cog me-2"></i> ユーザー管理</a></li>
-                                    <li><a class="dropdown-item" href="{{ url_for('role.index_view') }}"><i class="fas fa-user-tag me-2"></i> ロール管理</a></li>
+                                    <li><a class="dropdown-item" href="{{ url_for('blog_admin_bp.list_posts') }}"><i class="fas fa-blog me-2"></i> 投稿管理</a></li>
+                                    <li><a class="dropdown-item" href="{{ url_for('blog_admin_bp.manage_categories') }}"><i class="fas fa-sitemap me-2"></i> カテゴリ管理</a></li>
+                                    <li><a class="dropdown-item" href="{{ url_for('blog_admin_bp.manage_tags') }}"><i class="fas fa-tags me-2"></i> タグ管理</a></li>
+                                    <li><a class="dropdown-item" href="{{ url_for('blog_admin_bp.list_comments') }}"><i class="fas fa-comments me-2"></i> コメント管理</a></li>
+                                    <li><a class="dropdown-item" href="{{ url_for('blog_admin_bp.list_images') }}"><i class="fas fa-image me-2"></i> 画像管理</a></li>
+                                    <li><a class="dropdown-item" href="{{ url_for('blog_admin_bp.manage_users') }}"><i class="fas fa-users-cog me-2"></i> ユーザー管理</a></li>
+                                    <li><a class="dropdown-item" href="{{ url_for('blog_admin_bp.manage_roles') }}"><i class="fas fa-user-tag me-2"></i> ロール管理</a></li>
                                 {% endif %}
                                 
                                 {# 全ユーザー共通のログアウトリンク #}

@@ -34,7 +34,7 @@
                     {% endif %}
 
                     <div class="post-content">
-                        {{ post.body | safe }} {# contentはHTMLとして扱うため | safe を使用 #}
+                        {{ post.body | safe }} {# bodyはHTMLとして扱うため | safe を使用 #}
                     </div>
                 </div>
             </article>
@@ -54,7 +54,7 @@
                                     <h6 class="mb-0">{{ comment.user.username }}</h6>
                                     <small class="text-muted">{{ comment.timestamp.strftime('%Y年%m月%d日 %H:%M') }}</small>
                                 </div>
-                                <p class="mb-0">{{ comment.content }}</p>
+                                <p class="mb-0">{{ comment.body }}</p>
                             </li>
                             {% endfor %}
                         </ul>
@@ -69,11 +69,11 @@
                             {{ comment_form.csrf_token }} {# CSRFトークンを追加 #}
                             {# author_name フィールドはログインユーザーのみに制限するため削除済み #}
                             <div class="mb-3">
-                                {{ comment_form.content.label(class="form-label") }}
-                                {{ comment_form.content(class="form-control", rows="4") }}
-                                {% if comment_form.content.errors %}
+                                {{ comment_form.body.label(class="form-label") }}
+                                {{ comment_form.body(class="form-control", rows="4") }}
+                                {% if comment_form.body.errors %}
                                     <div class="invalid-feedback d-block">
-                                        {% for error in comment_form.content.errors %}
+                                        {% for error in comment_form.body.errors %}
                                             <span>{{ error }}</span>
                                         {% endfor %}
                                     </div>

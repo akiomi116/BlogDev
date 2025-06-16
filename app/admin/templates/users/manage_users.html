@@ -16,7 +16,7 @@
     {% endwith %}
 
     <div class="mb-3">
-        <a href="{{ url_for('admin.add_user') }}" class="btn btn-success">新規ユーザー追加</a>
+        <a href="{{ url_for('blog_admin_bp.add_user') }}" class="btn btn-success">新規ユーザー追加</a>
     </div>
 
     {% if users %}
@@ -52,9 +52,9 @@
                 <td>{{ user.last_login.strftime('%Y-%m-%d %H:%M') if user.last_login else 'N/A' }}</td>
                 <td>
                     <div class="btn-group" role="group">
-                        <a href="{{ url_for('admin.edit_user', user_id=user.id) }}" class="btn btn-sm btn-info">編集</a>
-                        <a href="{{ url_for('admin.change_user_role', user_id=user.id) }}" class="btn btn-sm btn-secondary">ロール変更</a> {# ロール変更機能も想定 #}
-                        <form action="{{ url_for('admin.delete_user', user_id=user.id) }}" method="POST" class="d-inline" onsubmit="return confirm('本当にこのユーザーを削除しますか？');">
+                        <a href="{{ url_for('blog_admin_bp.edit_user', user_id=user.id) }}" class="btn btn-sm btn-info">編集</a>
+                        <a href="{{ url_for('blog_admin_bp.change_user_role', user_id=user.id) }}" class="btn btn-sm btn-secondary">ロール変更</a> {# ロール変更機能も想定 #}
+                        <form action="{{ url_for('blog_admin_bp.delete_user', user_id=user.id) }}" method="POST" class="d-inline" onsubmit="return confirm('本当にこのユーザーを削除しますか？');">
                             <button type="submit" class="btn btn-sm btn-danger">削除</button>
                         </form>
                     </div>

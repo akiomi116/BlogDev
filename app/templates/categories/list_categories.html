@@ -21,7 +21,7 @@
     {% endwith %}
 
     <div class="mb-3">
-        <a href="{{ url_for('categories.new_category') }}" class="btn btn-primary">
+        <a href="{{ url_for('blog_admin_bp.new_category') }}" class="btn btn-primary">
             <i class="fas fa-plus"></i> 新しいカテゴリを追加
         </a>
     </div>
@@ -35,10 +35,10 @@
                         <a href="{{ url_for('home.posts_by_category', category_id=category.id) }}" class="btn btn-info">
                             <i class="fas fa-eye"></i> 詳細 
                         </a>
-                        <a href="{{ url_for('categories.edit_category', category_id=category.id) }}" class="btn btn-secondary">
+                        <a href="{{ url_for('blog_admin_bp.edit_category', category_id=category.id) }}" class="btn btn-secondary">
                             <i class="fas fa-edit"></i> 編集 
                         </a>
-                        <form action="{{ url_for('categories.delete_category', category_id=category.id) }}" method="POST" onsubmit="return confirm('本当にこのカテゴリを削除しますか？関連する投稿のカテゴリは未分類になります。');" class="d-inline">
+                        <form action="{{ url_for('blog_admin_bp.delete_category', category_id=category.id) }}" method="POST" onsubmit="return confirm('本当にこのカテゴリを削除しますか？関連する投稿のカテゴリは未分類になります。');" class="d-inline">
                             <button type="submit" class="btn btn-danger">
                                 <i class="fas fa-trash-alt" me-1></i> 削除 
                             </button>

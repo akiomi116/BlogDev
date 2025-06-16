@@ -259,17 +259,25 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // ページロード時に既存の選択があればプレビューを表示 (編集ページ用)
     // new_post.htmlでは不要ですが、edit_post.htmlで必要になります
-    {% if post and post.main_image %}
-    if ('{{ post.main_image.id }}') {
-        selectedImageIdInput.value = '{{ post.main_image.id }}';
-        selectedImageElement.src = '{{ post.main_image.path }}'; // または thumbnail_path
-        selectedImageElement.alt = '{{ post.main_image.filename }}';
-        selectedImageFilenameElement.textContent = '{{ post.main_image.filename }}';
-        selectedImagePreview.style.display = 'block';
-    }
-    {% endif %}
+    
+    {% if post and post.main_image and post.main_image.id %}
+    <script>
+        const imageId = '{{ post.main_image.id }}';
+        const imagePath = '{{ post.main_image.path }}';
+        const imageFilename = '{{ post.main_image.filename }}';
 
+        if (imageId) {
+            selectedImageIdInput.value = imageId;
+            selectedImageElement.src = imagePath;
+            selectedImageElement.alt = imageFilename;
+            selectedImageFilenameElement.textContent = imageFilename;
+            selectedImagePreview.style.display = 'block';
+        }
+    </script>
+    {% endif %}
 });
+
+
 </script>
 <style>
     .image-card {
@@ -285,4 +293,5 @@ document.addEventListener('DOMContentLoaded', function() {
         object-fit: cover;
     }
 </style>
-{% endblock %}
+{% block scripts_extra %}
+

@@ -47,16 +47,16 @@ def post_detail(post_id):
         if comment_form.validate_on_submit():
             current_app.logger.debug("DEBUG: Comment form validation successful.")
             try:
-                new_comment = Comment(
-                    content=comment_form.content.data,
+                comment = Comment(
+                    body=comment_form.body.data,
                     user_id=current_user.id,
                     post_id=post.id,
                     is_approved=False
                 )
-                db.session.add(new_comment)
+                db.session.add(comment)
                 db.session.commit()
                 flash('コメントが正常に投稿されました。承認後表示されます。', 'success')
-                current_app.logger.info(f"User {current_user.username} (ID: {current_user.id}) posted a comment on post {post_id}. Content: {comment_form.content.data[:50]}...")
+                current_app.logger.info(f"User {current_user.username} (ID: {current_user.id}) posted a comment on post {post_id}. Content: {comment_form.body.data[:50]}...")
                 return redirect(url_for('home.post_detail', post_id=post.id))
             except Exception as e:
                 db.session.rollback()

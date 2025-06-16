@@ -70,7 +70,7 @@ class User(UserMixin, db.Model):
 
     @property
     def is_admin(self):
-        """ユーザーが'Admin'ロールを持っているかチェックするプロパティ"""
+        """ユーザーが'admin'ロールを持っているかチェックするプロパティ"""
         return self.has_role('admin')
 
     @property
@@ -237,7 +237,7 @@ class Post(db.Model):
         backref=db.backref('posts_as_additional_image', lazy='dynamic')
     )
 
-    comments = relationship('Comment', backref='post', lazy='dynamic', cascade='all, delete-orphan')
+    comments = relationship('Comment', lazy='dynamic', cascade='all, delete-orphan')
 
     def __repr__(self):
         return f'<Post {self.title}>'
@@ -248,7 +248,7 @@ class Comment(db.Model):
     """
     __tablename__ = 'comment'
     id = db.Column(UUIDType(binary=False), primary_key=True, default=uuid.uuid4)
-    content = db.Column(db.Text, nullable=False)
+    body = db.Column(db.Text, nullable=False)
     timestamp = db.Column(db.DateTime, default=datetime.utcnow, nullable=False) # pytz.utc を使用するように変更
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(pytz.utc), nullable=False)
     updated_at = db.Column(db.DateTime, default=lambda: datetime.now(pytz.utc), onupdate=lambda: datetime.now(pytz.utc), nullable=False)
@@ -257,5 +257,9 @@ class Comment(db.Model):
     user_id = db.Column(UUIDType(binary=False), db.ForeignKey('user.id'), nullable=False) 
     post_id = db.Column(UUIDType(binary=False), db.ForeignKey('post.id'), nullable=False) 
 
+    # リレーションシップ
+    user = db.relationship('User', lazy='select')
+    post = db.relationship('Post', lazy='select')
+    
     def __repr__(self):
         return f'<Comment {self.id} on Post {self.post_id}>'

@@ -4,7 +4,7 @@
 {% block content %}
 <div class="container mt-4">
     <h2>{{ title }}</h2>
-    <form method="POST" action="{{ url_for('categories.new_category') }}">
+    <form method="POST" action="{{ url_for('blog_admin_bp.new_category') }}">
         {{ form.csrf_token }}
         <div class="mb-3">
             {{ form.name.label(class="form-label") }}
@@ -42,7 +42,7 @@
         </div>
         <div class="mb-3">
             {{ form.submit(class="btn btn-primary") }}
-            <a href="{{ url_for('categories.list_categories') }}" class="btn btn-secondary">キャンセル</a>
+            <a href="{{ url_for('blog_admin_bp.manage_categories') }}" class="btn btn-secondary">キャンセル</a>
         </div>
     </form>
 </div>

@@ -1,70 +1,62 @@
+{# F:\dev\BrogDev\app\admin\templates\users\edit_user.html #}
 {% extends "base.html" %}
 
-{% block title %}ユーザー編集 - 管理パネル{% endblock %}
+{% block title %}ユーザー編集: {{ user.username }}{% endblock %}
 
 {% block content %}
 <div class="container mt-4">
-    <h2>ユーザー: {{ user.username }} を編集</h2>
+    <h1 class="mb-4">ユーザー編集: {{ user.username }}</h1>
     <hr>
     <form method="POST">
-        {{ form.hidden_tag() }} {# CSRF トークン #}
-
+        {{ form.csrf_token }}
         <div class="mb-3">
             {{ form.username.label(class="form-label") }}
-            {# ユーザー名を事前に埋める #}
-            {{ form.username(class="form-control", value=user.username) }} 
-            {% if form.username.errors %}
-                {% for error in form.username.errors %}
-                    <div class="text-danger">{{ error }}</div>
-                {% endfor %}
-            {% endif %}
+            {{ form.username(class="form-control") }}
+            {% for error in form.username.errors %}
+                <div class="invalid-feedback d-block">{{ error }}</div>
+            {% endfor %}
         </div>
-
         <div class="mb-3">
             {{ form.email.label(class="form-label") }}
-            {# メールアドレスを事前に埋める #}
-            {{ form.email(class="form-control", value=user.email) }} 
-            {% if form.email.errors %}
-                {% for error in form.email.errors %}
-                    <div class="text-danger">{{ error }}</div>
-                {% endfor %}
-            {% endif %}
+            {{ form.email(class="form-control") }}
+            {% for error in form.email.errors %}
+                <div class="invalid-feedback d-block">{{ error }}</div>
+            {% endfor %}
         </div>
-
-        {# パスワードフィールドは編集時にオプションです。ユーザーが変更したい場合のみ表示します #}
         <div class="mb-3">
             {{ form.password.label(class="form-label") }}
-            {{ form.password(class="form-control", placeholder="変更しない場合は空のまま") }}
-            {% if form.password.errors %}
-                {% for error in form.password.errors %}
-                    <div class="text-danger">{{ error }}</div>
-                {% endfor %}
-            {% endif %}
+            {{ form.password(class="form-control") }}
+            {% for error in form.password.errors %}
+                <div class="invalid-feedback d-block">{{ error }}</div>
+            {% endfor %}
         </div>
-
         <div class="mb-3">
             {{ form.confirm_password.label(class="form-label") }}
-            {{ form.confirm_password(class="form-control", placeholder="変更しない場合は空のまま") }}
-            {% if form.confirm_password.errors %}
-                {% for error in form.confirm_password.errors %}
-                    <div class="text-danger">{{ error }}</div>
-                {% endfor %}
-            {% endif %}
+            {{ form.confirm_password(class="form-control") }}
+            {% for error in form.confirm_password.errors %}
+                <div class="invalid-feedback d-block">{{ error }}</div>
+            {% endfor %}
         </div>
-
+        <div class="mb-3 form-check">
+            {{ form.is_active(class="form-check-input") }}
+            {{ form.is_active.label(class="form-check-label") }}
+            {% for error in form.is_active.errors %}
+                <div class="invalid-feedback d-block">{{ error }}</div>
+            {% endfor %}
+        </div>
+        {# ★修正点: form.role を form.role_id に変更 ★#}
         <div class="mb-3">
-            {{ form.role.label(class="form-label") }}
-            {# ロールは routes.py で obj=user を使って事前に選択されます #}
-            {{ form.role(class="form-select") }} 
-            {% if form.role.errors %}
-                {% for error in form.role.errors %}
-                    <div class="text-danger">{{ error }}</div>
-                {% endfor %}
-            {% endif %}
+            {{ form.role_id.label(class="form-label") }}
+            {{ form.role_id(class="form-select") }}
+            {% for error in form.role_id.errors %}
+                <div class="invalid-feedback d-block">{{ error }}</div>
+            {% endfor %}
         </div>
-
-        <button type="submit" class="btn btn-primary">ユーザー更新</button>
-        <a href="{{ url_for('admin.manage_users') }}" class="btn btn-secondary">キャンセル</a>
+        <div class="d-flex justify-content-between">
+            {{ form.submit(class="btn btn-primary") }}
+            {# ★修正点: url_for('admin.manage_users') ではなく、blog_admin_bp を明示的に使用 ★#}
+            <a href="{{ url_for('blog_admin_bp.manage_users') }}" class="btn btn-secondary">キャンセル</a>
+        </div>
     </form>
 </div>
 {% endblock %}

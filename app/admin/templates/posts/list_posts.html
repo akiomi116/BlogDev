@@ -1,42 +1,13 @@
-{# F:\dev\BrogDev\app\admin\templates\posts\list_posts.html #}
+{# F:\dev\BrogDev\app\templates\posts\list_posts.html #}
 
 {% extends "base.html" %}
 
-{% block title %}投稿管理{% endblock %}
-
-{% block head_extra %}
-    {{ super() }}
-    <style>
-        .post-thumbnail {
-            width: 80px; /* サムネイルの幅を固定 */
-            height: 60px; /* サムネイルの高さを固定 */
-            object-fit: cover; /* 画像を中央に配置し、コンテナを埋める */
-            border-radius: 4px; /* 角を丸くする */
-        }
-        .no-image-placeholder {
-            width: 80px;
-            height: 60px;
-            background-color: #e9ecef; /* 薄いグレーの背景 */
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 4px;
-            color: #6c757d; /* テキストの色 */
-            font-size: 0.8em; /* テキストサイズを調整 */
-            text-align: center;
-            line-height: 1.2;
-            word-break: break-all; /* 長い単語でも改行 */
-            padding: 2px;
-        }
-    </style>
-{% endblock %}
+{% block title %}投稿一覧{% endblock %}
 
 {% block content %}
 <div class="container mt-4">
-    <h1 class="mb-4"><i class="fas fa-file-alt me-2"></i> 投稿管理</h1>
-    <p class="lead">ブログの投稿の新規作成、編集、公開状況の管理、および削除を行います。</p>
+    <h1 class="mb-4">投稿一覧</h1>
 
-    {# フラッシュメッセージの表示 #}
     {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
             {% for category, message in messages %}
@@ -48,95 +19,80 @@
         {% endif %}
     {% endwith %}
 
-    <div class="mb-3">
-        <a href="{{ url_for('admin.new_post') }}" class="btn btn-primary"><i class="fas fa-plus-circle me-2"></i> 新規投稿作成</a>
-    </div>
+    <div class="row">
+        {% if posts %}
+            {% for post in posts %}
+            <div class="col-md-6 mb-4">
+                <div class="card h-100 shadow-sm rounded-3">
+                    {# サムネイル画像表示の開始 #}
+                    {% if post.main_image %}
+                        <img src="{{ url_for('static', filename='uploads/thumbnails/' + post.main_image.thumbnail_filename) }}" 
+                             class="card-img-top img-fluid rounded-top-3" 
+                             alt="{{ post.main_image.original_filename or post.main_image.unique_filename }}" 
+                             style="max-height: 200px; object-fit: cover;">
+                    {% else %}
+                        {# 画像がない場合のプレースホルダー #}
+                        <img src="https://placehold.co/700x200/cccccc/333333?text=No+Image" 
+                             class="card-img-top img-fluid rounded-top-3" 
+                             alt="No Image Placeholder" 
+                             style="max-height: 200px; object-fit: cover;">
+                    {% endif %}
+                    {# サムネイル画像表示の終了 #}
 
-    {# 投稿テーブルの表示など #}
-    <div class="table-responsive">
-        <table class="table table-hover table-striped align-middle"> {# align-middle を追加して垂直方向中央揃えに #}
-            <thead>
-                <tr>
-                    <th>画像</th> {# 新しく追加する画像カラム #}
-                    <th>タイトル</th>
-                    <th>カテゴリ</th>
-                    <th>タグ</th>
-                    <th>投稿者</th>
-                    <th>公開状態</th>
-                    <th>作成日</th>
-                    <th>更新日</th>
-                    <th>操作</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for post in posts %}
-                <tr>
-                    <td>
-                        {% if post.main_image and post.main_image.thumbnail_url %}
-                            <img src="{{ post.main_image.thumbnail_url }}" 
-                                 alt="{{ post.title }}" 
-                                 class="post-thumbnail">
-                        {% else %}
-                            <div class="no-image-placeholder">
-                                No Image
+                    <div class="card-body d-flex flex-column">
+                        <h5 class="card-title"><a href="{{ url_for('home.post_detail', post_id=post.id) }}" class="text-decoration-none text-dark">{{ post.title }}</a></h5>
+                        <p class="card-text text-muted small mb-2">
+                            公開日時: {{ post.created_at.strftime('%Y-%m-%d %H:%M') }}
+                            {% if post.category %}
+                                <br>カテゴリ: <span class="badge bg-info text-dark">{{ post.category.name }}</span>
+                            {% endif %}
+                        </p>
+                        <p class="card-text text-truncate">{{ post.body | striptags | truncate(150) }}</p>
+                        <div class="mt-auto d-flex justify-content-between align-items-center">
+                            <a href="{{ url_for('home.post_detail', post_id=post.id) }}" class="btn btn-primary btn-sm rounded-pill">続きを読む</a>
+                            <div>
+                                {% if post.tags %}
+                                    {% for tag in post.tags %}
+                                        <span class="badge bg-secondary rounded-pill me-1">{{ tag.name }}</span>
+                                    {% endfor %}
+                                {% endif %}
                             </div>
+                        </div>
+                    </div>
+                    <div class="card-footer bg-white border-top-0 d-flex justify-content-end">
+                        {# 編集ボタン (適切なロールとユーザーの場合) #}
+                        {% if current_user.is_authenticated and (current_user.has_role('admin') or current_user.id == post.user_id) %}
+                            <a href="{{ url_for('blog_admin_bp.edit_post', post_id=post.id) }}" class="btn btn-sm btn-outline-info me-2 rounded-pill"><i class="fas fa-edit"></i> 編集</a>
                         {% endif %}
-                    </td>
-                    <td><a href="{{ url_for('home.post_detail', post_id=post.id) }}">{{ post.title }}</a></td>
-                    <td>{{ post.category.name if post.category else 'なし' }}</td>
-                    <td>
-                        {% for tag in post.tags %}
-                            <span class="badge bg-info text-dark me-1">{{ tag.name }}</span>
-                        {% endfor %}
-                    </td>
-                    <td>{{ post.posted_by.username if post.posted_by else '不明' }}</td>
-                    <td>
-                        <form action="{{ url_for('admin.toggle_publish', post_id=post.id) }}" method="POST" class="d-inline">
-                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"> 
-                            <button type="submit" class="btn btn-sm {% if post.is_published %}btn-success{% else %}btn-secondary{% endif %}">
-                                {% if post.is_published %}公開中{% else %}下書き{% endif %}
-                            </button>
-                        </form>
-                    </td>
-                    <td>{{ post.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
-                    <td>{{ post.updated_at.strftime('%Y-%m-%d %H:%M') }}</td>
-                    <td>
-                        <a href="{{ url_for('admin.edit_post', post_id=post.id) }}" class="btn btn-sm btn-warning me-1"><i class="fas fa-edit"></i> 編集</a>
-                        <form action="{{ url_for('admin.delete_post', post_id=post.id) }}" method="POST" class="d-inline" onsubmit="return confirm('本当にこの投稿を削除しますか？');">
-                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"> 
-                            <button type="submit" class="btn btn-sm btn-danger"><i class="fas fa-trash-alt"></i> 削除</button>
-                        </form>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+                        {# 削除ボタン (適切なロールの場合) #}
+                        {% if current_user.is_authenticated and current_user.has_role('admin') %}
+                            <form action="{{ url_for('blog_admin_bp.delete_post', post_id=post.id) }}" method="POST" class="d-inline">
+                                <button type="submit" class="btn btn-sm btn-outline-danger rounded-pill" onclick="return confirm('本当にこの投稿を削除しますか？');"><i class="fas fa-trash-alt"></i> 削除</button>
+                            </form>
+                        {% endif %}
+                        {# 公開/非公開切り替えボタン (適切なロールの場合) #}
+                        {% if current_user.is_authenticated and (current_user.has_role('admin') or current_user.has_role('editor') or current_user.id == post.user_id) %}
+                            <form action="{{ url_for('blog_admin_bp.toggle_publish', post_id=post.id) }}" method="POST" class="d-inline ms-2">
+                                <button type="submit" class="btn btn-sm {% if post.is_published %}btn-outline-warning{% else %}btn-outline-success{% endif %} rounded-pill">
+                                    <i class="fas {% if post.is_published %}fa-eye-slash{% else %}fa-eye{% endif %}"></i> {{ '非公開にする' if post.is_published else '公開する' }}
+                                </button>
+                            </form>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+            <div class="col-12">
+                <p class="text-center text-muted">まだ投稿がありません。</p>
+            </div>
+        {% endif %}
     </div>
-
-    {% if not posts %}
-        <p class="text-muted text-center mt-3">まだ投稿がありません。</p>
-    {% endif %}
-
 </div>
 {% endblock %}
 
-
 {% block scripts_extra %}
-    {{ super() }}
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js" xintegrity="sha384-geWF76RCwLtnZ8qwWowPQNguL3RmwHVBC9FhGdlKrxdiJJigF/h/6tIed9Ltxm+" crossorigin="anonymous"></script>
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-            var tooltipList = tooltipTriggerList.map(function(tooltipTriggerEl) {
-                return new bootstrap.Tooltip(tooltipTriggerEl);
-            });
-        });
-
-        function deletePost(postId, postTitle) {
-            document.getElementById('deletePostTitle').textContent = postTitle;
-            document.getElementById('deleteForm').action = `/admin/delete_post/${postId}`;
-            var deleteModal = new bootstrap.Modal(document.getElementById('deleteModal'));
-            deleteModal.show();
-        }
-    </script>
+{{ super() }}
+{# Font Awesome を使用するために追加していましたが、ファイルの問題により一時的に削除しました。#}
+{# 必要であれば、別途導入方法をご検討ください。#}
 {% endblock %}

@@ -1,26 +1,27 @@
-# F:\dev\BrogDev\app\admin\templates\users\change_user_role.html
-{% extends 'base.html' %} {# 必要に応じて admin/base.html を継承 #}
-{% block title %}ユーザーロール変更{% endblock %}
+{# F:\dev\BrogDev\app\admin\templates\users\change_user_role.html #}
+{% extends 'base.html' %} 
+
+{% block title %}役割変更: {{ user.username }}{% endblock %}
 
 {% block content %}
 <div class="container mt-4">
-    <h2 class="mb-4">ユーザー「{{ user.username }}」のロール変更</h2>
-
-    <form method="POST" action="">
-        {{ form.csrf_token }} {# CSRFトークンを必ず含める #}
-        <div class="form-group mb-3">
-            {{ form.role.label(class="form-label") }}
-            {{ form.role(class="form-control") }}
-            {% if form.role.errors %}
-                <div class="text-danger">
-                    {% for error in form.role.errors %}
-                        <span>{{ error }}</span>
-                    {% endfor %}
-                </div>
-            {% endif %}
+    <h1 class="mb-4">役割変更: {{ user.username }}</h1>
+    <hr>
+    <form method="POST">
+        {{ form.csrf_token }}
+        {# ★修正点: form.role を form.role_id に変更 ★#}
+        <div class="mb-3">
+            {{ form.role_id.label(class="form-label") }}
+            {{ form.role_id(class="form-select") }}
+            {% for error in form.role_id.errors %}
+                <div class="invalid-feedback d-block">{{ error }}</div>
+            {% endfor %}
         </div>
-        <button type="submit" class="btn btn-primary">ロールを変更</button>
-        <a href="{{ url_for('admin.manage_users') }}" class="btn btn-secondary">キャンセル</a>
+        <div class="d-flex justify-content-between">
+            {{ form.submit(class="btn btn-primary") }}
+            {# ★修正点: url_for('blog_admin_bp.list_users') ではなく、blog_admin_bp.manage_users を使用 ★#}
+            <a href="{{ url_for('blog_admin_bp.manage_users') }}" class="btn btn-secondary">キャンセル</a>
+        </div>
     </form>
 </div>
 {% endblock %}

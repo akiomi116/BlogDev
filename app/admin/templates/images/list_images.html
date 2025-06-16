@@ -18,9 +18,9 @@
 
     <div class="mb-3">
         {# 変更: 画像アップロードフォームへのリンクに修正 #}
-        <a href="{{ url_for('admin.show_bulk_upload_form') }}" class="btn btn-primary">画像をまとめてアップロード</a>
+        <a href="{{ url_for('blog_admin_bp.show_bulk_upload_form') }}" class="btn btn-primary">画像をまとめてアップロード</a>
         {# または、単一ファイルアップロードフォームがある場合は以下を使用 #}
-        {# <a href="{{ url_for('admin.upload_image') }}" class="btn btn-primary">新しい画像をアップロード (単一)</a> #}
+        {# <a href="{{ url_for('blog_admin_bp.upload_image') }}" class="btn btn-primary">新しい画像をアップロード (単一)</a> #}
     </div>
 
     <div class="row row-cols-1 row-cols-md-3 g-4">
@@ -60,9 +60,8 @@
                         </p>
                     </div>
                     <div class="card-footer d-flex justify-content-between">
-                        <form action="{{ url_for('admin.delete_image', image_id=image.id) }}" method="POST" onsubmit="return confirm('本当にこの画像を削除しますか？関連する投稿に影響が出る可能性があります。');">
-                            {# CSRFトークンを必ず含める #}
-                            {{ csrf_token() }}
+                        <form action="{{ url_for('blog_admin_bp.delete_image', image_id=image.id) }}" method="POST" onsubmit="return confirm('本当にこの画像を削除しますか？関連する投稿に影響が出る可能性があります。');">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"> 
                             <button type="submit" class="btn btn-danger btn-sm">削除</button>
                         </form>
                         {# 編集機能など、他のアクションボタンをここに追加できます #}

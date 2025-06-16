@@ -1,12 +1,12 @@
-{# F:\dev\BrogDev\app\admin\templates\manage_images.html #}
+{# F:\dev\BrogDev\app\admin\templates\images\manage_images.html - 管理者向け画像管理 #}
 {% extends "base.html" %}
 
-{% block title %}画像管理{% endblock %}
+{% block title %}画像管理 (管理者用){% endblock %}
 
 {% block content %}
 <div class="container mt-4">
-    <h1 class="mb-4"><i class="fas fa-images me-2"></i> 画像管理</h1>
-    <p class="lead">アップロードされた画像を管理します。投稿に利用する画像を選択、アップロード、削除できます。</p>
+    <h1 class="mb-4"><i class="fas fa-images me-2"></i> 画像管理 <small class="text-muted">(管理者用)</small></h1>
+    <p class="lead">アップロードされた画像の一覧を表示し、管理します。投稿に利用する画像を選択、アップロード、削除できます。</p>
 
     {# フラッシュメッセージの表示 #}
     {% with messages = get_flashed_messages(with_categories=true) %}
@@ -20,76 +20,51 @@
         {% endif %}
     {% endwith %}
 
-    <div class="mb-3 d-flex justify-content-end">
-        <a href="{{ url_for('uploads.show_upload_single_form') }}" class="btn btn-outline-primary me-2"><i class="fas fa-upload me-2"></i> 単一画像アップロード</a>
-        <a href="{{ url_for('uploads.show_bulk_upload_form') }}" class="btn btn-primary"><i class="fas fa-layer-group me-2"></i> 一括画像アップロード</a>
+    <div class="mb-3 d-flex flex-wrap gap-2">
+        {# アップロードフォームへのリンク (uploads Blueprintに統一) #}
+        <a href="{{ url_for('uploads.show_upload_single_form') }}" class="btn btn-primary"><i class="fas fa-upload me-2"></i> 単一画像をアップロード</a>
+        <a href="{{ url_for('uploads.show_bulk_upload_form') }}" class="btn btn-success"><i class="fas fa-cloud-upload-alt me-2"></i> 一括アップロード</a>
     </div>
 
-    {% if images %}
-        <div class="row row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-lg-4 g-4">
+    <div class="row row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-lg-4 g-4" id="imageGrid">
+        {% if images %}
             {% for image in images %}
             <div class="col">
                 <div class="card h-100 shadow-sm">
-                    <img src="{{ image.thumbnail_url or image.url }}" class="card-img-top img-fluid rounded" alt="{{ image.alt_text or image.original_filename }}" style="height: 180px; object-fit: cover;">
-                    <div class="card-body p-3">
-                        <h6 class="card-title text-truncate" title="{{ image.original_filename }}">{{ image.original_filename }}</h6>
-                        <p class="card-text small text-muted mb-1">
-                            アップロード日: {{ image.uploaded_at.strftime('%Y-%m-%d') }}
-                        </p>
-                        <p class="card-text small text-muted">
-                            アップロード者: {{ image.uploader.username if image.uploader else '不明' }}
-                        </p>
-                        <div class="d-flex justify-content-between align-items-center mt-2">
-                            <button type="button" class="btn btn-sm btn-outline-info copy-url-btn" 
-                                    data-full-url="{{ image.url }}" data-thumbnail-url="{{ image.thumbnail_url }}">
-                                <i class="fas fa-copy"></i> URLコピー
+                    <img src="{{ image.thumbnail_url or image.url }}"
+                         class="card-img-top img-fluid rounded"
+                         alt="{{ image.alt_text or image.original_filename }}"
+                         style="max-height: 200px; object-fit: cover;">
+
+                    <div class="card-body p-2">
+                        <p class="card-title text-truncate fw-bold mb-1" title="{{ image.original_filename }}">{{ image.original_filename }}</p>
+                        <p class="card-text"><small class="text-muted">ID: {{ image.id }}</small></p>
+                        <p class="card-text"><small class="text-muted">アップロード日時: {{ image.uploaded_at.strftime('%Y-%m-%d %H:%M') }}</small></p>
+                        <p class="card-text"><small class="text-muted">アップロードユーザー: {{ image.uploader.username if image.uploader else 'N/A' }}</small></p>
+
+                        <div class="d-flex flex-wrap gap-2 mt-2">
+                            <button type="button" class="btn btn-sm btn-info copy-image-url flex-grow-1"
+                                    data-image-url="{{ image.url }}">
+                                <i class="fas fa-copy me-1"></i> URLコピー
                             </button>
-                            <form action="{{ url_for('uploads.delete_image', image_id=image.id) }}" method="POST" class="d-inline" onsubmit="return confirm('本当にこの画像を削除しますか？');">
-                                <button type="submit" class="btn btn-sm btn-danger"><i class="fas fa-trash-alt"></i> 削除</button>
+                            <button type="button" class="btn btn-sm btn-success insert-markdown flex-grow-1"
+                                    data-image-url="{{ image.url }}"
+                                    data-alt-text="{{ image.alt_text if image.alt_text else image.original_filename }}">
+                                <i class="fas fa-code me-1"></i> Markdown挿入
+                            </button>
+                            {# 削除フォーム (uploads Blueprintに統一) #}
+                            <form action="{{ url_for('uploads.delete_image', image_id=image.id) }}" method="POST" class="d-inline flex-grow-1" onsubmit="return confirm('本当にこの画像を削除しますか？');">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit" class="btn btn-sm btn-danger w-100"><i class="fas fa-trash-alt me-1"></i> 削除</button>
                             </form>
                         </div>
                     </div>
                 </div>
             </div>
             {% endfor %}
-        </div>
-    {% else %}
-        <div class="text-center mt-5">
-            <i class="fas fa-image fa-5x text-muted mb-3"></i>
-            <p class="lead text-muted">まだ画像がアップロードされていません。</p>
-            <a href="{{ url_for('uploads.show_upload_single_form') }}" class="btn btn-primary btn-lg"><i class="fas fa-upload me-2"></i> 最初の画像をアップロード</a>
-        </div>
-    {% endif %}
-</div>
-
-{# URLコピーモーダル #}
-<div class="modal fade" id="urlCopyModal" tabindex="-1" aria-labelledby="urlCopyModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="urlCopyModalLabel">画像URLをコピー</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="閉じる"></button>
-            </div>
-            <div class="modal-body">
-                <div class="mb-3">
-                    <label for="fullImageUrl" class="form-label">フルサイズ画像URL:</label>
-                    <div class="input-group">
-                        <input type="text" id="fullImageUrl" class="form-control" readonly>
-                        <button class="btn btn-outline-secondary" type="button" onclick="copyToClipboard('fullImageUrl')">コピー</button>
-                    </div>
-                </div>
-                <div class="mb-3">
-                    <label for="thumbnailImageUrl" class="form-label">サムネイルURL:</label>
-                    <div class="input-group">
-                        <input type="text" id="thumbnailImageUrl" class="form-control" readonly>
-                        <button class="btn btn-outline-secondary" type="button" onclick="copyToClipboard('thumbnailImageUrl')">コピー</button>
-                    </div>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">閉じる</button>
-            </div>
-        </div>
+        {% else %}
+            <p class="text-muted col-12 text-center">まだ画像がアップロードされていません。</p>
+        {% endif %}
     </div>
 </div>
 {% endblock %}
@@ -98,32 +73,87 @@
 {{ super() }}
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-        // URLコピーボタンのイベントリスナー
-        document.querySelectorAll('.copy-url-btn').forEach(button => {
+        // URLコピー機能
+        document.querySelectorAll('.copy-image-url').forEach(button => {
             button.addEventListener('click', function() {
-                const fullUrl = this.dataset.fullUrl;
-                const thumbnailUrl = this.dataset.thumbnailUrl;
-                
-                document.getElementById('fullImageUrl').value = window.location.origin + fullUrl;
-                document.getElementById('thumbnailImageUrl').value = thumbnailUrl ? window.location.origin + thumbnailUrl : 'N/A';
+                const imageUrl = this.dataset.imageUrl;
+                navigator.clipboard.writeText(imageUrl).then(() => {
+                    const messageBox = document.createElement('div');
+                    messageBox.className = 'alert alert-success alert-dismissible fade show position-fixed top-0 start-50 translate-middle-x mt-3';
+                    messageBox.style.zIndex = 1050;
+                    messageBox.innerHTML = `
+                        画像URLをクリップボードにコピーしました！
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="閉じる"></button>
+                    `;
+                    document.body.appendChild(messageBox);
+                    setTimeout(() => new bootstrap.Alert(messageBox).close(), 3000);
+                }).catch(err => {
+                    console.error('URLのコピーに失敗しました', err);
+                    const messageBox = document.createElement('div');
+                    messageBox.className = 'alert alert-danger alert-dismissible fade show position-fixed top-0 start-50 translate-middle-x mt-3';
+                    messageBox.style.zIndex = 1050;
+                    messageBox.innerHTML = `
+                        URLのコピーに失敗しました。ブラウザのコンソールを確認してください。
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="閉じる"></button>
+                    `;
+                    document.body.appendChild(messageBox);
+                    setTimeout(() => new bootstrap.Alert(messageBox).close(), 5000);
+                });
+            });
+        });
 
-                const urlCopyModal = new bootstrap.Modal(document.getElementById('urlCopyModal'));
-                urlCopyModal.show();
+        // Markdown挿入機能
+        document.querySelectorAll('.insert-markdown').forEach(button => {
+            button.addEventListener('click', function() {
+                const imageUrl = this.dataset.imageUrl;
+                const altText = this.dataset.altText;
+
+                // 親ウィンドウ (投稿エディタがあるページ) にメッセージを送信
+                const targetOrigin = window.location.origin; 
+
+                if (window.parent && window.parent !== window) {
+                    window.parent.postMessage({
+                        type: 'insertImage',
+                        url: imageUrl,
+                        altText: altText
+                    }, targetOrigin);
+                    const messageBox = document.createElement('div');
+                    messageBox.className = 'alert alert-info alert-dismissible fade show position-fixed top-0 start-50 translate-middle-x mt-3';
+                    messageBox.style.zIndex = 1050;
+                    messageBox.innerHTML = `
+                        画像をエディタに挿入するメッセージを送信しました。
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="閉じる"></button>
+                    `;
+                    document.body.appendChild(messageBox);
+                    setTimeout(() => new bootstrap.Alert(messageBox).close(), 3000);
+                } else {
+                    // iframe で開かれていない場合や、連携できない場合のフォールバック
+                    const markdown = `![${altText}](${imageUrl})`;
+                    navigator.clipboard.writeText(markdown).then(() => {
+                        const messageBox = document.createElement('div');
+                        messageBox.className = 'alert alert-warning alert-dismissible fade show position-fixed top-0 start-50 translate-middle-x mt-3';
+                        messageBox.style.zIndex = 1050;
+                        messageBox.innerHTML = `
+                            Markdown形式をクリップボードにコピーしました:<br><br>${markdown}<br><br>※エディタに手動で貼り付けてください。
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="閉じる"></button>
+                        `;
+                        document.body.appendChild(messageBox);
+                        setTimeout(() => new bootstrap.Alert(messageBox).close(), 8000);
+                    }).catch(err => {
+                        console.error('Markdownのコピーに失敗しました', err);
+                        const messageBox = document.createElement('div');
+                        messageBox.className = 'alert alert-danger alert-dismissible fade show position-fixed top-0 start-50 translate-middle-x mt-3';
+                        messageBox.style.zIndex = 1050;
+                        messageBox.innerHTML = `
+                            Markdownのコピーに失敗しました。ブラウザのコンソールを確認してください。
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="閉じる"></button>
+                        `;
+                        document.body.appendChild(messageBox);
+                        setTimeout(() => new bootstrap.Alert(messageBox).close(), 5000);
+                    });
+                }
             });
         });
     });
-
-    function copyToClipboard(elementId) {
-        const copyText = document.getElementById(elementId);
-        copyText.select();
-        copyText.setSelectionRange(0, 99999); // For mobile devices
-        document.execCommand('copy');
-        // オプション: コピーしたことを示すフィードバック
-        const originalText = copyText.value;
-        copyText.value = 'コピーしました！';
-        setTimeout(() => {
-            copyText.value = originalText;
-        }, 1500);
-    }
 </script>
 {% endblock %}

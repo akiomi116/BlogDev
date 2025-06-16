@@ -3,7 +3,7 @@
 {% block content %}
 <div class="container mt-4">
     <h2>{{ title }}: {{ category.name }}</h2>
-    <form method="POST" action="{{ url_for('categories.edit_category', category_id=category.id) }}">
+    <form method="POST" action="{{ url_for('blog_admin_bp.edit_category', category_id=category.id) }}">
         {{ form.csrf_token }} {# ★CSRFトークンを追加 #}
         <div class="mb-3">
             {{ form.name.label(class="form-label") }}

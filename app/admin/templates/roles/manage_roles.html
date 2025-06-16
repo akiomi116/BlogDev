@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block title %}ロール管理 - 管理画面{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1>ロール管理</h1>
+    <hr>
+    <p>ユーザーのロール（役割）を管理するページです。</p>
+
+    <a href="{{ url_for('blog_admin_bp.new_role') }}" class="btn btn-success mb-3">
+        <i class="fas fa-plus-circle me-2"></i> 新しいロールを追加
+    </a>
+
+    <table class="table table-striped table-bordered">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>ロール名</th>
+                <th>説明</th>
+                <th>アクション</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% if roles %}
+                {% for role in roles %}
+                <tr>
+                    <td>{{ role.id }}</td>
+                    <td>{{ role.name }}</td>
+                    <td>{{ role.description or '説明なし' }}</td>
+                    <td>
+                        <a href="{{ url_for('blog_admin_bp.edit_role', role_id=role.id) }}" class="btn btn-sm btn-warning me-1">編集</a>
+                        <form action="{{ url_for('blog_admin_bp.delete_role', role_id=role.id) }}" method="POST" class="d-inline">
+                            {{ form.csrf_token }} 
+                            <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('本当にこのロールを削除しますか？');">削除</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            {% else %}
+            <tr>
+                <td colspan="4">ロールはまだ登録されていません。</td>
+            </tr>
+            {% endif %}
+        </tbody>
+    </table>
+
+</div>
+{% endblock %}

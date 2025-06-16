@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+
+{% block title %}新しいロールを追加 - 管理画面{% endblock %} {# title ブロックも更新 #}
+
+{% block content %}
+<div class="container mt-4">
+    <h1>新しいロールを追加</h1>
+    <hr>
+    <form method="POST">
+        {{ form.csrf_token }}
+        
+        <div class="mb-3">
+            {{ form.name.label(class="form-label") }}
+            {{ form.name(class="form-control") }}
+            {% if form.name.errors %}
+                {% for error in form.name.errors %}
+                    <div class="text-danger">{{ error }}</div>
+                {% endfor %}
+            {% endif %}
+        </div>
+        {% if form.description %}
+            <div class="mb-3">
+                {{ form.description.label(class="form-label") }}
+                {{ form.description(class="form-control") }}
+                {% if form.description.errors %}
+                    {% for error in form.description.errors %}
+                        <div class="text-danger">{{ error }}</div>
+                    {% endfor %}
+                {% endif %}
+            </div>
+        {% endif %}
+
+        {# ロールに description フィールドがある場合 #}
+        {% if form.description %}
+            {{ render_field(form.description, class="form-control") }}
+        {% endif %}
+
+        <div class="mt-3">
+            {{ form.submit(class="btn btn-primary") }}
+            <a href="{{ url_for('blog_admin_bp.manage_roles') }}" class="btn btn-secondary ms-2">キャンセル</a> {# ★ここを修正 #}
+        </div>
+    </form>
+</div>
+{% endblock %}

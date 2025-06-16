@@ -60,29 +60,3 @@ def toggle_approval(comment_id):
     
     return redirect(url_for('comments.list_comments'))
 
-# コメント削除のルート (adminのみ)
-@comments_bp.route('/delete/<uuid:comment_id>', methods=['POST'])
-@login_required
-def delete_comment(comment_id):
-    if not current_user.is_authenticated or \
-       not hasattr(current_user, 'role') or \
-       not current_user.role or \
-       current_user.role.name != 'admin':
-        flash('この操作を行う権限がありません。', 'danger')
-        abort(403)
-
-    comment = db.session.get(Comment, comment_id)
-    if comment is None:
-        flash('コメントが見つかりませんでした。', 'danger')
-        abort(404)
-
-    try:
-        db.session.delete(comment)
-        db.session.commit()
-        flash('コメントが正常に削除されました。', 'success')
-    except Exception as e:
-        db.session.rollback()
-        flash(f'コメントの削除中にエラーが発生しました: {e}', 'danger')
-        current_app.logger.error(f"Error deleting comment {comment_id}: {e}", exc_info=True)
-    
-    return redirect(url_for('comments.list_comments'))

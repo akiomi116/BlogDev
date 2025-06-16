@@ -1,0 +1,29 @@
+{# F:\dev\BrogDev\app\admin\templates\comments\edit_comment.html #}
+{% extends "base.html" %}
+
+{% block title %}コメント編集{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1 class="mb-4">コメント編集</h1>
+    <hr>
+    <form method="POST">
+        {{ form.csrf_token }}
+        <div class="mb-3">
+            {{ form.body.label(class="form-label") }}
+            {{ form.body(class="form-control", rows="5") }}
+            {% for error in form.body.errors %}
+                <div class="invalid-feedback d-block">{{ error }}</div>
+            {% endfor %}
+        </div>
+        <div class="mb-3 form-check">
+            {{ form.approved(class="form-check-input") }}
+            {{ form.approved.label(class="form-check-label") }}
+        </div>
+        <div class="d-flex justify-content-between">
+            {{ form.submit(class="btn btn-primary") }}
+            <a href="{{ url_for('blog_admin_bp.list_comments') }}" class="btn btn-secondary">キャンセル</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

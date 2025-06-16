@@ -16,7 +16,7 @@
     {% endwith %}
 
     <div class="mb-3">
-        <a href="{{ url_for('admin.new_tag') }}" class="btn btn-primary">新しいタグを追加</a>
+        <a href="{{ url_for('blog_admin_bp.new_tag') }}" class="btn btn-primary">新しいタグを追加</a>
     </div>
 
     {% if tags %}
@@ -38,8 +38,8 @@
                     <td>{{ tag.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
                     <td>{{ tag.updated_at.strftime('%Y-%m-%d %H:%M') if tag.updated_at else 'N/A' }}</td>
                     <td>
-                        <a href="{{ url_for('admin.edit_tag', tag_id=tag.id) }}" class="btn btn-sm btn-info me-2">編集</a>
-                        <form action="{{ url_for('admin.delete_tag', tag_id=tag.id) }}" method="POST" class="d-inline" onsubmit="return confirm('本当にこのタグを削除しますか？');">
+                        <a href="{{ url_for('blog_admin_bp.edit_tag', tag_id=tag.id) }}" class="btn btn-sm btn-info me-2">編集</a>
+                        <form action="{{ url_for('blog_admin_bp.delete_tag', tag_id=tag.id) }}" method="POST" class="d-inline" onsubmit="return confirm('本当にこのタグを削除しますか？');">
                             <button type="submit" class="btn btn-sm btn-danger">削除</button>
                         </form>
                     </td>

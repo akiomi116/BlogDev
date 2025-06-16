@@ -4,7 +4,7 @@
 {% block content %}
 <div class="container mt-4">
     <h2>{{ title }}: {{ tag.name }}</h2>
-    <form method="POST" action="{{ url_for('tags.edit_tag', tag_id=tag.id) }}">
+    <form method="POST" action="{{ url_for('blog_admin_bp.edit_tag', tag_id=tag.id) }}">
         {{ form.csrf_token }}
         <div class="mb-3">
             {{ form.name.label(class="form-label") }}
@@ -19,7 +19,7 @@
         </div>
         <div class="mb-3">
             {{ form.submit(class="btn btn-primary") }}
-            <a href="{{ url_for('tags.list_tags') }}" class="btn btn-secondary">キャンセル</a>
+            <a href="{{ url_for('blog_admin_bp.manage_tags') }}" class="btn btn-secondary">キャンセル</a>
         </div>
     </form>
 </div>
