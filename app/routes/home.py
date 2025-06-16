@@ -31,7 +31,9 @@ def post_detail(post_id):
     if post is None:
         current_app.logger.warning(f"Attempted to access non-existent post with ID: {post_id}")
         abort(404)
-
+    
+    comments = Comment.query.options(db.joinedload(Comment.comment_author)).filter_by(post_id=post.id).all()
+    
     comment_form = CommentForm()
 
     if request.method == 'POST': # validate_on_submit() の前にまずPOSTリクエストであることを確認
