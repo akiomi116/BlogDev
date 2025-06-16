@@ -1,9 +1,9 @@
 /image.csv
-/logs
+logs/
 /post.csv
 /__pycache__
 
 /README.md
-/flaskenv
-/migrations
-/instance
+flaskenv/
+migrations/
+instance/
