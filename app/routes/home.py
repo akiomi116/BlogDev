@@ -2,7 +2,7 @@
 
 from flask import Blueprint, render_template, redirect, url_for, flash, request, current_app, abort
 from flask_login import login_required, current_user # current_user を使用するためにインポートを確認
-from app.models import Post, Comment # Comment モデルを追加
+from app.models import Post, Comment, Category, Tag # Comment モデルを追加
 from app.extensions import db
 from app.forms import CommentForm # CommentForm のインポートを確認
 import logging
@@ -90,7 +90,7 @@ def posts_by_category(category_id):
     # 関連する投稿をフィルタリング
     posts = Post.query.filter_by(category_id=category_id).order_by(Post.created_at.desc()).all()
     current_year = datetime.now().year
-    return render_template('home/category_posts.html', category=category, posts=posts, current_year=current_year)
+    return render_template('home/posts_by_category.html', category=category, posts=posts, current_year=current_year)
 
 # タグ別投稿一覧
 @home_bp.route('/tag/<uuid:tag_id>')
@@ -101,7 +101,7 @@ def posts_by_tag(tag_id):
     # タグと関連する投稿を取得
     posts = tag.posts.order_by(Post.created_at.desc()).all() # Tagモデルに`posts`リレーションがあると仮定
     current_year = datetime.now().year
-    return render_template('home/tag_posts.html', tag=tag, posts=posts, current_year=current_year)
+    return render_template('home/posts_by_tag.html', tag=tag, posts=posts, current_year=current_year)
 
 # 検索結果ページ
 @home_bp.route('/search')
