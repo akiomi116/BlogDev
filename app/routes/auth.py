@@ -17,7 +17,7 @@ def login():
     if current_user.is_authenticated:
         # ログイン済みの場合、ユーザーのロールに基づいてリダイレクト
         if current_user.role and current_user.role.name in ['admin', 'poster']:
-            return redirect(url_for('blog_admin_bp.index')) # 管理者・投稿者は管理ダッシュボードへ
+            return redirect(url_for('blog_admin_bp.admin_dashboardindex')) # 管理者・投稿者は管理ダッシュボードへ
         else:
             return redirect(url_for('home.index')) # その他のユーザーは一般ホームへ（要 home.index ルートの定義）
 
@@ -32,7 +32,7 @@ def login():
 
             # ログイン成功後、ユーザーのロールに基づいてリダイレクト先を決定
             if user.role and user.role.name in ['admin', 'poster']:
-                return redirect(next_page or url_for('blog_admin_bp.index')) # 管理者・投稿者は管理ダッシュボードへ
+                return redirect(next_page or url_for('blog_admin_bp.admin_dashboard')) # 管理者・投稿者は管理ダッシュボードへ
             else:
                 return redirect(next_page or url_for('home.index')) # その他のユーザーは一般ホームへ
 
@@ -48,7 +48,7 @@ def register():
     if current_user.is_authenticated:
         # ログイン済みの場合、ユーザーのロールに基づいてリダイレクト
         if current_user.role and current_user.role.name in ['admin', 'poster']:
-            return redirect(url_for('blog_admin_bp.index')) # 管理者・投稿者は管理ダッシュボードへ
+            return redirect(url_for('blog_admin_bp.admin_dashboard')) # 管理者・投稿者は管理ダッシュボードへ
         else:
             return redirect(url_for('home.index')) # その他のユーザーは一般ホームへ
 

@@ -4,7 +4,7 @@ from flask import Blueprint, render_template, redirect, url_for, flash, request,
 from flask_login import login_required, current_user # current_user を使用するためにインポートを確認
 from app.models import Post, Comment, Category, Tag # Comment モデルを追加
 from app.extensions import db
-from app.forms import CommentForm # CommentForm のインポートを確認
+from app.forms import CommentForm, CsrfOnlyForm # 
 import logging
 from datetime import datetime
 import pytz
@@ -19,9 +19,14 @@ home_bp = Blueprint('home', __name__)
 def index():
     logger.debug("DEBUG(home): index route accessed.")
     posts = Post.query.order_by(Post.created_at.desc()).all()
+    csrf_form = CsrfOnlyForm()
     # current_year をテンプレートに渡す (フッター用)
     current_year = datetime.now().year
-    return render_template('home/index.html', posts=posts, current_year=current_year)
+    return render_template('posts/list_posts.html', # テンプレート名を 'posts/list_posts.html' に変更するか確認 ★★★
+                           posts=posts, 
+                           current_year=current_year,
+                           form=csrf_form) # form=csrf_form を追加 ★★★
+    #return render_template('home/index.html', posts=posts, current_year=current_year)
 
 # 投稿詳細ページ
 @home_bp.route('/post/<uuid:post_id>', methods=['GET', 'POST'])
@@ -89,6 +94,7 @@ def posts_by_category(category_id):
         abort(404)
     # 関連する投稿をフィルタリング
     posts = Post.query.filter_by(category_id=category_id).order_by(Post.created_at.desc()).all()
+    csrf_form = CsrfOnlyForm() 
     current_year = datetime.now().year
     return render_template('home/posts_by_category.html', category=category, posts=posts, current_year=current_year)
 
@@ -100,6 +106,7 @@ def posts_by_tag(tag_id):
         abort(404)
     # タグと関連する投稿を取得
     posts = tag.posts.order_by(Post.created_at.desc()).all() # Tagモデルに`posts`リレーションがあると仮定
+    csrf_form = CsrfOnlyForm() 
     current_year = datetime.now().year
     return render_template('home/posts_by_tag.html', tag=tag, posts=posts, current_year=current_year)
 
@@ -116,6 +123,7 @@ def search_results():
     else:
         posts = []
         flash('検索キーワードが入力されていません。', 'warning')
+    csrf_form = CsrfOnlyForm() 
     current_year = datetime.now().year
     return render_template('home/search_results.html', posts=posts, query=query, current_year=current_year)
 

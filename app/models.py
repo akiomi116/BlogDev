@@ -249,3 +249,14 @@ class Comment(db.Model):
     
     def __repr__(self):
         return f'<Comment {self.id} on Post {self.post_id}>'
+    
+class QR(db.Model):
+    __tablename__ = 'qr_codes' # テーブル名を指定する
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    url = db.Column(db.String(500), nullable=False)
+    qr_image_filename = db.Column(db.String(255), nullable=False) # 生成されたQRコード画像のファイル名
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f"QR(id='{self.id}', name='{self.name}', url='{self.url}')"

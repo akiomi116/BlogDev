@@ -67,12 +67,14 @@
                         {# 削除ボタン (適切なロールの場合) #}
                         {% if current_user.is_authenticated and current_user.has_role('admin') %}
                             <form action="{{ url_for('blog_admin_bp.delete_post', post_id=post.id) }}" method="POST" class="d-inline">
+                                {{ form.csrf_token }}
                                 <button type="submit" class="btn btn-sm btn-outline-danger rounded-pill" onclick="return confirm('本当にこの投稿を削除しますか？');"><i class="fas fa-trash-alt"></i> 削除</button>
                             </form>
                         {% endif %}
                         {# 公開/非公開切り替えボタン (適切なロールの場合) #}
                         {% if current_user.is_authenticated and (current_user.has_role('admin') or current_user.has_role('editor') or current_user.id == post.user_id) %}
                             <form action="{{ url_for('blog_admin_bp.toggle_publish', post_id=post.id) }}" method="POST" class="d-inline ms-2">
+                                {{ form.csrf_token }}
                                 <button type="submit" class="btn btn-sm {% if post.is_published %}btn-outline-warning{% else %}btn-outline-success{% endif %} rounded-pill">
                                     <i class="fas {% if post.is_published %}fa-eye-slash{% else %}fa-eye{% endif %}"></i> {{ '非公開にする' if post.is_published else '公開する' }}
                                 </button>

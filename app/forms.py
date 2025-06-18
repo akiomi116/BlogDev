@@ -263,3 +263,27 @@ class CommentForm(FlaskForm):
     body = TextAreaField('コメント本文', validators=[DataRequired()])
     approved = BooleanField('承認済み')
     submit = SubmitField('更新')
+
+
+# CSRFトークンを埋め込むためだけの空のフォーム
+class CsrfOnlyForm(FlaskForm):
+    pass
+
+# QRコード管理用のフォーム
+class QRForm(FlaskForm):
+    name = StringField('QRコード名', validators=[DataRequired(), Length(min=1, max=100)])
+    url = StringField('URL', validators=[DataRequired(), Length(min=1, max=500)])
+    submit = SubmitField('QRコードを作成/更新')
+
+# 必要であれば、ImageUploadFormも完全な形ではないので、以下に例を示します
+class ImageUploadForm(FlaskForm):
+    image_file = FileField('画像をアップロード', validators=[FileAllowed(['jpg', 'png', 'jpeg', 'gif'], '画像ファイルのみ許可されます！')])
+    submit = SubmitField('アップロード')
+
+# ContactFormももし存在しない場合のために例を示します
+class ContactForm(FlaskForm):
+    name = StringField('名前', validators=[DataRequired(), Length(max=100)])
+    email = StringField('メールアドレス', validators=[DataRequired(), Email(), Length(max=120)])
+    subject = StringField('件名', validators=[DataRequired(), Length(max=200)])
+    message = TextAreaField('メッセージ', validators=[DataRequired()])
+    submit = SubmitField('送信')
