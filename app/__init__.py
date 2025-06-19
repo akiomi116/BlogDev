@@ -106,7 +106,7 @@ def create_app(config_class=None):
     app.register_blueprint(home_bp)
     app.register_blueprint(auth_bp, url_prefix='/auth')
     app.register_blueprint(public_posts_bp) 
-    app.register_blueprint(blog_admin_bp) # ここでblog_admin_bpを登録
+    app.register_blueprint(blog_admin_bp, url_prefix='/admin') # ここでblog_admin_bpを登録
 
     # 静的ファイル配信のためのエンドポイント (アップロードされた画像など)
     @app.route('/uploads/images/<path:filename>')
@@ -131,4 +131,9 @@ def create_app(config_class=None):
     from app import cli 
     app.cli.add_command(cli.init) 
 
+    print("\n--- Flask URL Map ---")
+    for rule in app.url_map.iter_rules():
+        print(f"Endpoint: {rule.endpoint}, Methods: {rule.methods}, Rule: {rule.rule}")
+    print("---------------------\n")
+    
     return app

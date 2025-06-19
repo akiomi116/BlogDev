@@ -22,7 +22,7 @@ def index():
     csrf_form = CsrfOnlyForm()
     # current_year をテンプレートに渡す (フッター用)
     current_year = datetime.now().year
-    return render_template('posts/list_posts.html', # テンプレート名を 'posts/list_posts.html' に変更するか確認 ★★★
+    return render_template('posts/list_public.html', # テンプレート名を 'posts/list_posts.html' に変更するか確認 ★★★
                            posts=posts, 
                            current_year=current_year,
                            form=csrf_form) # form=csrf_form を追加 ★★★

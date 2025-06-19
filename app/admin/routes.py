@@ -2,745 +2,921 @@
 
 import os
 import uuid
-import datetime
-import qrcode
-from io import BytesIO
-import base64
-
-from flask import render_template, redirect, url_for, flash, request, current_app, abort, send_from_directory, jsonify
+from flask import render_template, url_for, flash, redirect, request, current_app, Blueprint, jsonify
 from flask_login import login_required, current_user
-from sqlalchemy import func, cast, String
 from werkzeug.utils import secure_filename
-from werkzeug.security import generate_password_hash # パスワードハッシュ化のために追加
+from sqlalchemy import func
+from PIL import Image as PilImage
 
-from app import db
-from app.models import Post, Category, User, Comment, Tag, Image, QR # QRモデルも追加
-# 仮のフォームクラス。実際のアプリケーションでは app/forms.py に定義が必要です。
-from app.forms import CsrfOnlyForm, PostForm, UserForm, CategoryForm, TagForm, QRForm, ImageUploadForm, ContactForm # 必要に応じて追加
+from app.extensions import db
+from app.models import User, Role, Post, Category, Tag, Image, Comment
 
+# app/forms.py から汎用フォームをインポート
+from app.forms import CsrfOnlyForm 
 
-# Blueprintをインポート（__init__.pyでbpとして定義されているものをblog_admin_bpとして利用）
-from app.admin import bp as blog_admin_bp
+# app/admin/forms.py から管理画面専用フォームをインポート
+from app.admin.forms import (
+    UserForm, RoleForm, DeleteRoleForm, UserRoleForm, # UserRoleForm も追加
+    PostForm, CategoryForm, TagForm,
+    ImageUploadForm, BulkImageUploadForm,
+    AdminCommentForm, # ← CommentForm から AdminCommentForm に変更
+    QRForm # もし管理画面でQRFormを使うなら追加
+)
 
-# 役割ベースのアクセス制御デコレータ（app/decorators.py に定義されている前提）
-# from app.decorators import roles_required 
+from app.decorators import roles_required
 
-# ====================================================================
-# ヘルパー関数
-# ====================================================================
+from slugify import slugify
+
+from . import bp
+
+# 定数
+THUMBNAIL_SIZE = (200, 200) # サムネイルのサイズを定義
+
+# 許可されるファイル拡張子
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
 
 def allowed_file(filename):
-    """許可されたファイル拡張子をチェックするヘルパー関数"""
     return '.' in filename and \
-           filename.rsplit('.', 1)[1].lower() in current_app.config['ALLOWED_EXTENSIONS']
+           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-def _save_image(file):
-    """画像を保存し、Imageモデルインスタンスを返すヘルパー関数"""
-    if file and allowed_file(file.filename):
-        # UUIDとオリジナル拡張子を組み合わせたユニークなファイル名を生成
-        original_filename = secure_filename(file.filename)
-        extension = os.path.splitext(original_filename)[1]
-        unique_filename = str(uuid.uuid4()) + extension
-        
-        filepath = os.path.join(current_app.config['UPLOAD_FOLDER'], unique_filename)
-        file.save(filepath)
 
-        # Imageモデルインスタンスを作成
-        # url_for('uploaded_file', ...) は、uploaded_fileエンドポイントが定義されている前提
-        image_url = url_for('uploaded_file', filename=unique_filename)
-        new_image = Image(filename=unique_filename, url=image_url)
-        db.session.add(new_image)
-        db.session.flush() # IDを生成するためにflush
-        return new_image
-    return None
-
-# ====================================================================
-# 管理ダッシュボード
-# ====================================================================
-@blog_admin_bp.route('/')
-@blog_admin_bp.route('/index')
-@login_required 
-# @roles_required(['admin', 'editor', 'poster']) 
-def admin_dashboard():
-    # 統計情報の取得
-    total_posts = Post.query.count()
-    published_posts = Post.query.filter_by(is_published=True).count()
-    draft_posts = Post.query.filter_by(is_published=False).count()
-    
-    # カテゴリ数を取得（少なくとも1つ以上の投稿に紐づくカテゴリの数を取得）
-    actual_category_count = db.session.query(Category.id).join(Post).distinct().count()
-    
-    # コメント数を取得（未承認コメントも含む）
-    total_comments = Comment.query.count()
-    unapproved_comments = Comment.query.filter_by(is_approved=False).count()
-    
-    # 最新の投稿を取得 (例: 最新6件をGistのテンプレートに合わせて表示)
-    latest_posts = Post.query.order_by(Post.created_at.desc()).limit(6).all()
-
-    # 投稿をカテゴリごとにグループ化して、ダッシュボードの投稿一覧セクションで利用
-    # Gistのindex.htmlの`grouped_posts`に対応
-    all_posts = Post.query.order_by(Post.created_at.desc()).all()
-    grouped_posts = {}
-    if all_posts:
-        for post in all_posts:
-            category_name = post.category.name if post.category else '未分類'
-            if category_name not in grouped_posts:
-                grouped_posts[category_name] = []
-            grouped_posts[category_name].append(post)
-
-    # テンプレートにデータを渡す
-    return render_template('admin/index.html',
-                           total_posts=total_posts,
-                           published_posts=published_posts,
-                           draft_posts=draft_posts,
-                           actual_category_count=actual_category_count,
-                           total_comments=total_comments,
-                           unapproved_comments=unapproved_comments,
-                           latest_posts=latest_posts, # Gistのlatest_postsに対応
-                           grouped_posts=grouped_posts, # Gistのgrouped_postsに対応
-                           form=CsrfOnlyForm() # CSRF保護のためにフォームも渡す
-                          )
-
-# ====================================================================
-# 投稿管理
-# ====================================================================
-
-# 投稿一覧 (Gistのlist_postsをベース)
-@blog_admin_bp.route('/posts')
+# --- ダッシュボード ---
+@bp.route('/')
+@bp.route('/index')
 @login_required
-# @roles_required(['admin', 'editor', 'poster'])
-def list_posts():
-    posts = Post.query.order_by(Post.created_at.desc()).all()
-    return render_template('admin/posts/list_posts.html', posts=posts, form=CsrfOnlyForm())
+@roles_required(['admin', 'editor', 'poster']) # 適切なロールを設定
+def index():
+    # ユーザーが'admin'ロールを持っているか確認
+    if current_user.has_role('admin'):
+        total_users = User.query.count()
+        total_posts = Post.query.count()
+        total_categories = Category.query.count()
+        total_tags = Tag.query.count()
+        total_images = Image.query.count()
+        total_comments = Comment.query.count()
+        pending_comments_count = Comment.query.filter_by(is_approved=False).count()
 
-# 新規投稿作成 (Gistのnew_postをベースにフォームと画像処理を改善)
-@blog_admin_bp.route('/new_post', methods=['GET', 'POST'])
-@login_required
-# @roles_required(['admin', 'editor', 'poster'])
-def new_post():
-    form = PostForm() # app/forms.py に PostForm を定義しておく必要があります
-    if form.validate_on_submit():
-        main_image = _save_image(form.image_file.data) if form.image_file.data else None
+        # 最近の活動 (例: 最新の投稿とコメント)
+        latest_posts = Post.query.order_by(Post.created_at.desc()).limit(5).all()
+        latest_comments = Comment.query.order_by(Comment.created_at.desc()).limit(5).all()
 
-        new_post = Post(
-            title=form.title.data,
-            body=form.body.data,
-            category_id=form.category.data.id if form.category.data else None,
-            user_id=current_user.id,
-            is_published=form.is_published.data,
-            main_image=main_image
-        )
-        db.session.add(new_post)
-        
-        # タグの処理
-        if form.tags.data:
-            tag_names = [tag.strip() for tag in form.tags.data.split(',') if tag.strip()]
-            for tag_name in tag_names:
-                tag = Tag.query.filter_by(name=tag_name).first()
-                if not tag:
-                    tag = Tag(name=tag_name)
-                    db.session.add(tag)
-                new_post.tags.append(tag)
-        
-        db.session.commit()
-        flash('新しい投稿が作成されました！', 'success')
-        return redirect(url_for('blog_admin_bp.list_posts'))
-    
-    categories = Category.query.all()
-    return render_template('admin/posts/new_post.html', form=form, categories=categories)
-
-# 投稿編集 (Gistのedit_postをベースにフォームと画像処理を改善)
-@blog_admin_bp.route('/edit_post/<uuid:post_id>', methods=['GET', 'POST'])
-@login_required
-# @roles_required(['admin', 'editor', 'poster'])
-def edit_post(post_id):
-    post = Post.query.get_or_404(str(post_id))
-
-    # 投稿者自身か管理者のみ編集可能
-    if not (current_user.id == post.user_id or (current_user.role and current_user.role.name == 'admin')):
-        abort(403) # Forbidden
-
-    form = PostForm(obj=post) # PostFormが定義されていることを前提とする
-
-    if request.method == 'GET':
-        # 既存のタグをフォームにセット
-        form.tags.data = ", ".join([tag.name for tag in post.tags])
-    
-    if form.validate_on_submit():
-        post.title = form.title.data
-        post.body = form.body.data
-        post.is_published = form.is_published.data
-        post.category_id = form.category.data.id if form.category.data else None
-
-        # 画像ファイルの更新ロジック (Gistの既存ロジックと統合)
-        if form.image_file.data: # 新しい画像がアップロードされた場合
-            # 古い画像があれば削除
-            if post.main_image:
-                try:
-                    os.remove(os.path.join(current_app.config['UPLOAD_FOLDER'], post.main_image.filename))
-                    db.session.delete(post.main_image)
-                except FileNotFoundError:
-                    current_app.logger.warning(f"Old image file not found: {post.main_image.filename}")
-            
-            # 新しい画像の保存とImageモデルへの登録
-            new_image = _save_image(form.image_file.data)
-            post.main_image = new_image
-        elif form.clear_image.data and post.main_image: # 画像を削除するチェックボックスがある場合
-            try:
-                os.remove(os.path.join(current_app.config['UPLOAD_FOLDER'], post.main_image.filename))
-                db.session.delete(post.main_image)
-                post.main_image = None
-            except FileNotFoundError:
-                current_app.logger.warning(f"Image file to clear not found: {post.main_image.filename}")
-
-        # タグの更新
-        post.tags.clear() # 既存のタグをクリア
-        if form.tags.data:
-            tag_names = [tag.strip() for tag in form.tags.data.split(',') if tag.strip()]
-            for tag_name in tag_names:
-                tag = Tag.query.filter_by(name=tag_name).first()
-                if not tag:
-                    tag = Tag(name=tag_name)
-                    db.session.add(tag)
-                post.tags.append(tag)
-
-        db.session.commit()
-        flash('投稿が更新されました！', 'success')
-        return redirect(url_for('blog_admin_bp.list_posts'))
-    
-    categories = Category.query.all()
-    return render_template('admin/posts/edit_post.html', form=form, post=post, categories=categories)
-
-
-# 投稿削除 (Gistのdelete_postをベースにCSRF保護と権限チェックを追加)
-@blog_admin_bp.route('/delete_post/<uuid:post_id>', methods=['POST'])
-@login_required
-# @roles_required(['admin', 'editor']) # 管理者または編集者のみ削除可能
-def delete_post(post_id):
-    form = CsrfOnlyForm() # 削除用のCSRFフォーム
-    if form.validate_on_submit():
-        post = Post.query.get_or_404(str(post_id))
-        
-        # 投稿者自身か管理者のみ削除可能
-        if not (current_user.id == post.user_id or (current_user.role and current_user.role.name == 'admin')):
-            flash('この投稿を削除する権限がありません。', 'danger')
-            return redirect(url_for('blog_admin_bp.list_posts'))
-
-        # 関連する画像ファイルを削除（あれば）
-        if post.main_image:
-            try:
-                os.remove(os.path.join(current_app.config['UPLOAD_FOLDER'], post.main_image.filename))
-                db.session.delete(post.main_image)
-            except FileNotFoundError:
-                current_app.logger.warning(f"Image file not found for deletion: {post.main_image.filename}")
-
-        db.session.delete(post)
-        db.session.commit()
-        flash(f'投稿 "{post.title}" を削除しました。', 'success')
+        return render_template('index.html', # 'admin/index.html' -> 'index.html'
+                               total_users=total_users,
+                               total_posts=total_posts,
+                               total_categories=total_categories,
+                               total_tags=total_tags,
+                               total_images=total_images,
+                               total_comments=total_comments,
+                               pending_comments_count=pending_comments_count,
+                               latest_posts=latest_posts,
+                               latest_comments=latest_comments,
+                               title='管理ダッシュボード')
     else:
-        flash('無効なリクエストです。', 'error')
-    return redirect(url_for('blog_admin_bp.list_posts'))
-
-# 投稿の公開状態切り替え (以前の議論で修正済み、CSRF保護あり)
-@blog_admin_bp.route('/toggle_publish/<uuid:post_id>', methods=['POST'])
-@login_required
-# @roles_required(['admin', 'editor', 'poster'])
-def toggle_publish(post_id):
-    form = CsrfOnlyForm()
-    if form.validate_on_submit():
-        post = Post.query.get_or_404(str(post_id))
-        post.is_published = not post.is_published
-        db.session.commit()
-        flash(f'投稿 "{post.title}" の公開状態を切り替えました。', 'success')
-    else:
-        flash('無効なリクエストです。', 'error')
-    return redirect(url_for('blog_admin_bp.list_posts'))
-
-# ====================================================================
-# カテゴリ管理
-# ====================================================================
-
-# カテゴリ一覧表示と追加/編集/削除 (Gistのmanage_categoriesをベースにCRUD操作を統合)
-@blog_admin_bp.route('/manage_categories', methods=['GET', 'POST'])
-@login_required
-# @roles_required(['admin']) # 管理者のみアクセス可能
-def manage_categories():
-    form = CategoryForm() # CategoryFormが定義されていることを前提とする
-
-    if request.method == 'POST' and form.validate_on_submit():
-        # 追加または編集の処理
-        if request.form.get('category_id'): # 隠しフィールドでIDが送られてきたら編集
-            category_id = int(request.form.get('category_id'))
-            category = Category.query.get_or_404(category_id)
-            category.name = form.name.data
-            flash('カテゴリが更新されました！', 'success')
-        else: # IDがなければ新規追加
-            new_category = Category(name=form.name.data)
-            db.session.add(new_category)
-            flash('新しいカテゴリが追加されました！', 'success')
-        db.session.commit()
-        return redirect(url_for('blog_admin_bp.manage_categories'))
-    
-    categories = Category.query.order_by(Category.name).all()
-    # GistのHTMLに合わせて、カテゴリ編集用のデータも渡す必要があれば調整
-    return render_template('admin/categories/manage_categories.html', categories=categories, form=form, CsrfOnlyForm=CsrfOnlyForm)
-
-# カテゴリ削除 (POSTリクエストで受け付ける)
-@blog_admin_bp.route('/delete_category/<int:category_id>', methods=['POST'])
-@login_required
-# @roles_required(['admin'])
-def delete_category(category_id):
-    form = CsrfOnlyForm() # CSRF保護
-    if form.validate_on_submit():
-        category = Category.query.get_or_404(category_id)
+        # 'admin'ロールを持たないユーザー向けのダッシュボード（簡略版など）
+        # 例えば、自分の投稿のみを表示するなど
+        user_posts_count = Post.query.filter_by(user_id=current_user.id).count()
+        user_comments_count = Comment.query.filter_by(user_id=current_user.id).count()
         
-        # このカテゴリに紐づく投稿がある場合、それらのカテゴリを「未分類」に移動
-        if category.posts:
-            uncategorized = Category.query.filter_by(name='未分類').first()
-            if not uncategorized:
-                uncategorized = Category(name='未分類')
-                db.session.add(uncategorized)
-                db.session.commit() # 未分類カテゴリを先にコミット
+        latest_user_posts = Post.query.filter_by(user_id=current_user.id).order_by(Post.created_at.desc()).limit(5).all()
 
-            for post in category.posts:
-                post.category = uncategorized
-            db.session.commit()
-            flash(f'カテゴリ "{category.name}" に紐づく投稿は未分類に移動されました。', 'info')
-        
-        db.session.delete(category)
-        db.session.commit()
-        flash(f'カテゴリ "{category.name}" を削除しました。', 'success')
-    else:
-        flash('無効なリクエストです。', 'error')
-    return redirect(url_for('blog_admin_bp.manage_categories'))
+        return render_template('dashboard.html', # 'admin/dashboard.html' -> 'dashboard.html'
+                               user_posts_count=user_posts_count,
+                               user_comments_count=user_comments_count,
+                               latest_user_posts=latest_user_posts,
+                               title='ユーザーダッシュボード')
 
-
-# ====================================================================
-# コメント管理
-# ====================================================================
-
-# コメント一覧 (Gistのlist_commentsをベース)
-@blog_admin_bp.route('/list_comments', methods=['GET', 'POST']) # 承認/削除がPOSTで来る可能性を考慮
+# --- ユーザー管理 ---
+@bp.route('/users')
 @login_required
-# @roles_required(['admin', 'editor'])
-def list_comments():
-    comments = Comment.query.order_by(Comment.created_at.desc()).all()
-    # コメントの承認・削除用のフォーム
-    return render_template('admin/comments/list_comments.html', comments=comments, form=CsrfOnlyForm())
-
-# コメントの承認/非承認切り替え (CSRF保護あり)
-@blog_admin_bp.route('/comment/<uuid:comment_id>/toggle_approval', methods=['POST'])
-@login_required
-# @roles_required(['admin', 'editor'])
-def toggle_comment_approval(comment_id):
-    form = CsrfOnlyForm()
-    if form.validate_on_submit():
-        comment = Comment.query.get_or_404(str(comment_id))
-        comment.is_approved = not comment.is_approved
-        db.session.commit()
-        flash(f'コメントの承認状態を切り替えました。', 'success')
-    else:
-        flash('無効なリクエストです。', 'error')
-    return redirect(url_for('blog_admin_bp.list_comments'))
-
-# コメント削除 (CSRF保護あり)
-@blog_admin_bp.route('/delete_comment/<uuid:comment_id>', methods=['POST'])
-@login_required
-# @roles_required(['admin'])
-def delete_comment(comment_id):
-    form = CsrfOnlyForm()
-    if form.validate_on_submit():
-        comment = Comment.query.get_or_404(str(comment_id))
-        db.session.delete(comment)
-        db.session.commit()
-        flash('コメントを削除しました。', 'success')
-    else:
-        flash('無効なリクエストです。', 'error')
-    return redirect(url_for('blog_admin_bp.list_comments'))
-
-# ====================================================================
-# タグ管理
-# ====================================================================
-
-# タグ一覧と追加/編集/削除 (Gistにはないが、管理画面に必要)
-@blog_admin_bp.route('/tags', methods=['GET', 'POST'])
-@login_required
-# @roles_required(['admin', 'editor'])
-def list_tags():
-    form = TagForm() # app/forms.py に TagForm を定義しておく必要があります
-    if form.validate_on_submit():
-        # タグの追加または編集処理
-        tag_id = request.form.get('tag_id') # 編集の場合にIDを取得
-        if tag_id:
-            tag = Tag.query.get_or_404(int(tag_id))
-            tag.name = form.name.data
-            flash('タグが更新されました！', 'success')
-        else:
-            new_tag = Tag(name=form.name.data)
-            db.session.add(new_tag)
-            flash('新しいタグが追加されました！', 'success')
-        db.session.commit()
-        return redirect(url_for('blog_admin_bp.list_tags'))
-
-    tags = Tag.query.order_by(Tag.name).all()
-    return render_template('admin/tags/manage_tags.html', tags=tags, form=form, CsrfOnlyForm=CsrfOnlyForm)
-
-# タグ削除 (POSTリクエストで受け付ける)
-@blog_admin_bp.route('/delete_tag/<int:tag_id>', methods=['POST'])
-@login_required
-# @roles_required(['admin'])
-def delete_tag(tag_id):
-    form = CsrfOnlyForm()
-    if form.validate_on_submit():
-        tag = Tag.query.get_or_404(tag_id)
-        # タグが投稿に紐づいている場合、紐付けを解除
-        for post in tag.posts:
-            post.tags.remove(tag)
-        db.session.delete(tag)
-        db.session.commit()
-        flash(f'タグ "{tag.name}" を削除しました。', 'success')
-    else:
-        flash('無効なリクエストです。', 'error')
-    return redirect(url_for('blog_admin_bp.list_tags'))
-
-# ====================================================================
-# ユーザー管理
-# ====================================================================
-
-# ユーザー管理 (Gistのuser_managementをベース)
-@blog_admin_bp.route('/user_management')
-@login_required
-# @roles_required(['admin']) # 管理者のみアクセス可能
-def user_management():
+@roles_required(['admin'])
+def list_users():
     users = User.query.all()
-    return render_template('admin/user_management.html', users=users, form=CsrfOnlyForm())
+    users_with_roles = []
+    for user in users:
+        users_with_roles.append({
+            'user': user,
+            'role_name': user.role.name if user.role else '未設定'
+        })
+    
+    # NameErrorを解消するため、formをインスタンス化
+    # list_users.htmlで新規ユーザー作成フォームとして使うことを想定
+    form = UserForm()
+    # ロールの選択肢を設定
+    form.role_id.choices = [(str(role.id), role.name) for role in Role.query.order_by(Role.name.asc()).all()]
 
-# ユーザー編集 (Gistのedit_userをベース)
-@blog_admin_bp.route('/edit_user/<int:user_id>', methods=['GET', 'POST'])
+    return render_template('users/list_users.html', users=users_with_roles, form=form, title='ユーザー管理')
+
+@bp.route('/users/add', methods=['GET', 'POST'])
 @login_required
-# @roles_required(['admin'])
+@roles_required(['admin'])
+def add_user():
+    form = UserForm()
+    if form.validate_on_submit():
+        user = User(username=form.username.data, email=form.email.data)
+        user.set_password(form.password.data)
+        
+        # ロールを設定 (role_id を使用)
+        role = Role.query.get(form.role_id.data)
+        if role:
+            user.role = role
+        
+        # is_active フィールドの値を設定
+        if hasattr(form, 'is_active'):
+            user.is_active = form.is_active.data
+
+        db.session.add(user)
+        db.session.commit()
+        flash('ユーザーが追加されました。', 'success')
+        return redirect(url_for('blog_admin_bp.list_users'))
+    return render_template('users/add_edit_user.html', form=form, title='ユーザー追加', is_edit=False) # 'admin/users/add_edit_user.html' -> 'users/add_edit_user.html'
+
+@bp.route('/users/edit/<uuid:user_id>', methods=['GET', 'POST'])
+@login_required
+@roles_required(['admin'])
 def edit_user(user_id):
-    user = User.query.get_or_404(user_id)
-    form = UserForm(obj=user) # UserFormが定義されていることを前提とする
+    user = db.session.get(User, user_id)
+    if user is None:
+        flash('ユーザーが見つかりません。', 'danger')
+        return redirect(url_for('blog_admin_bp.list_users'))
+
+    form = UserForm(obj=user)
+    # フォームにユーザーの現在のロールIDを初期値として設定
+    if user.role:
+        form.role_id.data = str(user.role.id)
+    else:
+        form.role_id.data = '' # ロールが設定されていない場合
 
     if form.validate_on_submit():
         user.username = form.username.data
         user.email = form.email.data
-        # パスワードはフォームで入力された場合のみ更新
         if form.password.data:
-            user.password_hash = generate_password_hash(form.password.data)
-        user.is_active = form.is_active.data
-        user.role_id = form.role.data.id if form.role.data else None # ロールIDの更新
+            user.set_password(form.password.data)
+        
+        # ロールを設定 (role_id を使用)
+        role = Role.query.get(form.role_id.data)
+        if role:
+            user.role = role
+        else:
+            user.role = None # ロールが選択されていない場合
+
+        # is_active フィールドの値を設定
+        if hasattr(form, 'is_active'):
+            user.is_active = form.is_active.data
 
         db.session.commit()
-        flash('ユーザー情報が更新されました。', 'success')
-        return redirect(url_for('blog_admin_bp.user_management'))
-    
-    return render_template('admin/edit_user.html', form=form, user=user)
+        flash('ユーザーが更新されました。', 'success')
+        return redirect(url_for('blog_admin_bp.list_users'))
+    elif request.method == 'GET':
+        form.username.data = user.username
+        form.email.data = user.email
+        # is_active フィールドの初期値を設定
+        if hasattr(form, 'is_active') and hasattr(user, 'is_active'):
+            form.is_active.data = user.is_active
 
-# ユーザーのアクティブ状態切り替え (Gistのtoggle_user_activeをベースにCSRF保護追加)
-@blog_admin_bp.route('/toggle_user_active/<int:user_id>', methods=['POST'])
-@login_required
-# @roles_required(['admin'])
-def toggle_user_active(user_id):
-    form = CsrfOnlyForm()
-    if form.validate_on_submit():
-        user = User.query.get_or_404(user_id)
-        if user.id == current_user.id:
-            flash('自分自身のアクティブ状態を切り替えることはできません。', 'danger')
-        else:
-            user.is_active = not user.is_active
-            db.session.commit()
-            flash(f'ユーザー {user.username} のアクティブ状態を切り替えました。', 'success')
-    else:
-        flash('無効なリクエストです。', 'error')
-    return redirect(url_for('blog_admin_bp.user_management'))
+    return render_template('users/add_edit_user.html', form=form, user=user, title='ユーザー編集', is_edit=True) # 'admin/users/add_edit_user.html' -> 'users/add_edit_user.html'
 
-# ユーザー削除 (Gistのdelete_userをベースにCSRF保護追加)
-@blog_admin_bp.route('/delete_user/<int:user_id>', methods=['POST'])
+@bp.route('/users/delete/<uuid:user_id>', methods=['POST'])
 @login_required
-# @roles_required(['admin'])
+@roles_required(['admin'])
 def delete_user(user_id):
-    form = CsrfOnlyForm()
-    if form.validate_on_submit():
-        user = User.query.get_or_404(user_id)
-        if user.id == current_user.id:
-            flash('自分自身を削除することはできません。', 'danger')
-        else:
-            # ユーザーに関連する投稿、コメントなどをどうするか検討
-            # 例えば、投稿のuser_idをNoneにする、または削除するなど
-            # 簡単化のため、ここでは関連する投稿やコメントはそのまま残ると仮定（CASCADE設定による）
-            db.session.delete(user)
-            db.session.commit()
-            flash(f'ユーザー {user.username} を削除しました。', 'success')
-    else:
-        flash('無効なリクエストです。', 'error')
-    return redirect(url_for('blog_admin_bp.user_management'))
+    user_to_delete = db.session.get(User, user_id)
+    if not user_to_delete:
+        flash('ユーザーが見つかりません。', 'danger')
+        return redirect(url_for('blog_admin_bp.list_users'))
 
-# ====================================================================
-# 画像管理
-# ====================================================================
+    # ログイン中のユーザー自身を削除しようとしていないか確認
+    if user_to_delete.id == current_user.id:
+        flash('自分自身のアカウントを削除することはできません。', 'danger')
+        return redirect(url_for('blog_admin_bp.list_users'))
 
-# 画像管理 (Gistのimage_managementをベースにアップロード処理を統合)
-@blog_admin_bp.route('/image_management', methods=['GET', 'POST'])
+    try:
+        db.session.delete(user_to_delete)
+        db.session.commit()
+        flash('ユーザーが削除されました。', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'ユーザーの削除中にエラーが発生しました: {e}', 'danger')
+
+    return redirect(url_for('blog_admin_bp.list_users'))
+
+# --- ロール管理 ---
+@bp.route('/roles')
 @login_required
-# @roles_required(['admin', 'editor', 'poster'])
-def image_management():
-    form = ImageUploadForm() # 画像アップロードフォーム (app/forms.pyに定義)
+@roles_required(['admin'])
+def manage_roles():
+    roles = Role.query.all()
+    delete_form = DeleteRoleForm() # 削除フォームを各ロール用にインスタンス化
+    return render_template('roles/manage_roles.html', roles=roles, delete_form=delete_form, title='ロール管理') # 'admin/roles/manage_roles.html' -> 'roles/manage_roles.html'
+
+@bp.route('/roles/add', methods=['GET', 'POST'])
+@login_required
+@roles_required(['admin'])
+def add_role():
+    form = RoleForm()
     if form.validate_on_submit():
-        new_image = _save_image(form.image_file.data)
-        if new_image:
+        role = Role(name=form.name.data)
+        db.session.add(role)
+        db.session.commit()
+        flash('新しいロールが追加されました。', 'success')
+        return redirect(url_for('blog_admin_bp.manage_roles'))
+    return render_template('roles/add_edit_role.html', form=form, title='ロール追加', is_edit=False) # 'admin/roles/add_edit_role.html' -> 'roles/add_edit_role.html'
+
+@bp.route('/roles/edit/<int:role_id>', methods=['GET', 'POST'])
+@login_required
+@roles_required(['admin'])
+def edit_role(role_id):
+    role = db.session.get(Role, role_id)
+    if role is None:
+        flash('ロールが見つかりません。', 'danger')
+        return redirect(url_for('blog_admin_bp.manage_roles'))
+
+    form = RoleForm(obj=role)
+    if form.validate_on_submit():
+        role.name = form.name.data
+        db.session.commit()
+        flash('ロールが更新されました。', 'success')
+        return redirect(url_for('blog_admin_bp.manage_roles'))
+    elif request.method == 'GET':
+        form.name.data = role.name
+    return render_template('roles/add_edit_role.html', form=form, role=role, title='ロール編集', is_edit=True) # 'admin/roles/add_edit_role.html' -> 'roles/add_edit_role.html'
+
+@bp.route('/roles/delete/<int:role_id>', methods=['POST'])
+@login_required
+@roles_required(['admin'])
+def delete_role(role_id):
+    role_to_delete = db.session.get(Role, role_id)
+    if not role_to_delete:
+        flash('ロールが見つかりません。', 'danger')
+        return redirect(url_for('blog_admin_bp.manage_roles'))
+
+    # 'admin'ロールは削除できないようにする
+    if role_to_delete.name == 'admin':
+        flash('「admin」ロールは削除できません。', 'danger')
+        return redirect(url_for('blog_admin_bp.manage_roles'))
+
+    # そのロールに属するユーザーがいないか確認
+    # ロールに紐づくユーザーがいる場合、先にユーザーのロールを解除または変更する必要がある
+    if role_to_delete.users.count() > 0:
+        flash(f'このロールにはまだ{role_to_delete.users.count()}人のユーザーが紐付いています。先にこれらのユーザーのロールを変更または削除してください。', 'warning')
+        return redirect(url_for('blog_admin_bp.manage_roles'))
+
+    try:
+        db.session.delete(role_to_delete)
+        db.session.commit()
+        flash('ロールが削除されました。', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'ロールの削除中にエラーが発生しました: {e}', 'danger')
+
+    return redirect(url_for('blog_admin_bp.manage_roles'))
+
+# --- 投稿管理 ---
+@bp.route('/posts')
+@login_required
+@roles_required(['admin', 'editor', 'poster'])
+def list_posts():
+    if current_user.has_role('admin'):
+        posts = Post.query.order_by(Post.created_at.desc()).all()
+    else:
+        posts = Post.query.filter_by(user_id=current_user.id).order_by(Post.created_at.desc()).all()
+    
+    # CSRF保護のためのフォームを渡す
+    csrf_form = CsrfOnlyForm() 
+
+    return render_template('posts/list_posts.html', posts=posts, title='投稿管理', csrf_form=csrf_form)
+
+@bp.route('/posts/new', methods=['GET', 'POST'])
+@login_required
+@roles_required(['admin', 'editor', 'poster'])
+def new_post():
+    form = PostForm()
+    if form.validate_on_submit():
+        main_image_file = form.main_image_file.data
+        selected_main_image_id = form.main_image.data
+        
+        main_image_obj = None
+        if main_image_file and allowed_file(main_image_file.filename):
+            # 新しいメイン画像をアップロード
+            unique_filename = str(uuid.uuid4()) + os.path.splitext(secure_filename(main_image_file.filename))[1]
+            filepath = os.path.join(current_app.config['UPLOAD_FOLDER'], 'images', unique_filename)
+            main_image_file.save(filepath)
+
+            # サムネイル生成
+            thumbnail_filename = 'thumb_' + unique_filename
+            thumbnail_filepath = os.path.join(current_app.config['UPLOAD_FOLDER'], 'thumbnails', thumbnail_filename)
+            PilImage.open(filepath).thumbnail(THUMBNAIL_SIZE).save(thumbnail_filepath)
+            
+            main_image_obj = Image(
+                original_filename=main_image_file.filename,
+                unique_filename=unique_filename,
+                thumbnail_filename=thumbnail_filename,
+                filepath=f'uploads/images/{unique_filename}',
+                thumbnail_filepath=f'uploads/thumbnails/{thumbnail_filename}',
+                user_id=current_user.id,
+                is_main_image=True,
+                alt_text=form.main_image_alt_text.data # 修正: PostForm に追加した main_image_alt_text を使用
+            )
+            db.session.add(main_image_obj)
+            db.session.flush() # IDを生成するためにflush
+        elif selected_main_image_id:
+            # 既存のメイン画像を選択
+            main_image_obj = db.session.get(Image, selected_main_image_id)
+            if main_image_obj:
+                # 既存の画像をメイン画像として使用する場合、元のis_main_imageをFalseに設定するロジックが必要な場合がある
+                # ただし、main_image_idがunique=Trueなので、自動的に更新されるはず
+                main_image_obj.is_main_image = True # 明示的にTrueに設定
+                if form.main_image_alt_text.data: # 修正: PostForm に追加した main_image_alt_text を使用
+                    main_image_obj.alt_text = form.main_image_alt_text.data
+            else:
+                flash('選択されたメイン画像が見つかりません。', 'warning')
+                return redirect(url_for('blog_admin_bp.new_post'))
+        
+        category = None
+        if form.category.data:
+            category = db.session.get(Category, form.category.data)
+
+        new_post = Post(
+            title=form.title.data,
+            body=form.body.data,
+            posted_by=current_user,
+            category=category,
+            is_published=form.is_published.data,
+            main_image=main_image_obj # メイン画像オブジェクトを割り当て
+        )
+        db.session.add(new_post)
+        db.session.flush() # new_post.id を生成するためにflush
+
+        # タグの関連付け
+        selected_tags = []
+        if form.tags.data:
+            selected_tags = Tag.query.filter(Tag.id.in_(form.tags.data)).all()
+        new_post.tags = selected_tags
+
+        # 追加画像の関連付け
+        selected_additional_images = []
+        if form.additional_images.data:
+            selected_additional_images = Image.query.filter(Image.id.in_(form.additional_images.data)).all()
+        new_post.additional_images = selected_additional_images
+
+        db.session.commit()
+        flash('新しい投稿が作成されました。', 'success')
+        return redirect(url_for('blog_admin_bp.list_posts'))
+    
+    # GETリクエスト時、またはバリデーションエラー時
+    return render_template('posts/edit_post.html', form=form, title='新規投稿', is_edit=False) 
+
+@bp.route('/posts/edit/<uuid:post_id>', methods=['GET', 'POST'])
+@login_required
+@roles_required(['admin', 'editor', 'poster'])
+def edit_post(post_id):
+    post = db.session.get(Post, post_id)
+    if post is None:
+        flash('投稿が見つかりません。', 'danger')
+        return redirect(url_for('blog_admin_bp.list_posts'))
+
+    # 投稿の所有者または管理者のみが編集可能
+    if not (current_user.has_role('admin') or post.user_id == current_user.id):
+        flash('この投稿を編集する権限がありません。', 'danger')
+        return redirect(url_for('blog_admin_bp.list_posts'))
+
+    form = PostForm(obj=post)
+
+    # フォームの初期値を設定
+    if request.method == 'GET':
+        form.title.data = post.title
+        form.body.data = post.body
+        form.is_published.data = post.is_published
+        if post.category:
+            form.category.data = str(post.category.id)
+        form.tags.data = [str(tag.id) for tag in post.tags]
+        if post.main_image:
+            form.main_image.data = str(post.main_image.id)
+            form.main_image_alt_text.data = post.main_image.alt_text # 既存のalt_textをフォームにセット
+        form.additional_images.data = [str(img.id) for img in post.additional_images]
+
+    if form.validate_on_submit():
+        post.title = form.title.data
+        post.body = form.body.data
+        post.is_published = form.is_published.data
+
+        # カテゴリの更新
+        if form.category.data:
+            post.category = db.session.get(Category, form.category.data)
+        else:
+            post.category = None
+
+        # タグの更新
+        selected_tags = []
+        if form.tags.data:
+            selected_tags = Tag.query.filter(Tag.id.in_(form.tags.data)).all()
+        post.tags = selected_tags # 既存のタグを更新
+
+        # メイン画像の処理
+        new_main_image_file = form.main_image_file.data
+        selected_main_image_id = form.main_image.data
+
+        if new_main_image_file and allowed_file(new_main_image_file.filename):
+            # 新しいメイン画像をアップロード
+            unique_filename = str(uuid.uuid4()) + os.path.splitext(secure_filename(new_main_image_file.filename))[1]
+            filepath = os.path.join(current_app.config['UPLOAD_FOLDER'], 'images', unique_filename)
+            new_main_image_file.save(filepath)
+
+            # サムネイル生成
+            thumbnail_filename = 'thumb_' + unique_filename
+            thumbnail_filepath = os.path.join(current_app.config['UPLOAD_FOLDER'], 'thumbnails', thumbnail_filename)
+            PilImage.open(filepath).thumbnail(THUMBNAIL_SIZE).save(thumbnail_filepath)
+            
+            # 古いメイン画像があれば is_main_image を False にする
+            if post.main_image:
+                post.main_image.is_main_image = False
+            
+            main_image_obj = Image(
+                original_filename=new_main_image_file.filename,
+                unique_filename=unique_filename,
+                thumbnail_filename=thumbnail_filename,
+                filepath=f'uploads/images/{unique_filename}',
+                thumbnail_filepath=f'uploads/thumbnails/{thumbnail_filename}',
+                user_id=current_user.id,
+                is_main_image=True,
+                alt_text=form.main_image_alt_text.data # 修正: PostForm に追加した main_image_alt_text を使用
+            )
+            db.session.add(main_image_obj)
+            post.main_image = main_image_obj
+
+        elif selected_main_image_id:
+            # 既存のメイン画像を選択
+            new_main_image_obj = db.session.get(Image, selected_main_image_id)
+            if new_main_image_obj:
+                # 既存の画像をメイン画像として使用する場合、元のis_main_imageをFalseに設定するロジックが必要な場合がある
+                if post.main_image and post.main_image.id != new_main_image_obj.id:
+                    post.main_image.is_main_image = False
+                new_main_image_obj.is_main_image = True # 明示的にTrueに設定
+                post.main_image = new_main_image_obj
+                if form.main_image_alt_text.data: # 修正: PostForm に追加した main_image_alt_text を使用
+                    post.main_image.alt_text = form.main_image_alt_text.data
+            else:
+                # 選択された既存画像が見つからない場合、メイン画像を解除
+                if post.main_image:
+                    post.main_image.is_main_image = False
+                post.main_image = None
+                flash('選択されたメイン画像が見つかりません。メイン画像を解除しました。', 'warning')
+        else:
+            # どちらも選択されていない場合、メイン画像を解除
+            if post.main_image:
+                post.main_image.is_main_image = False
+            post.main_image = None
+
+        # 追加画像の更新
+        selected_additional_images = []
+        if form.additional_images.data:
+            selected_additional_images = Image.query.filter(Image.id.in_(form.additional_images.data)).all()
+        post.additional_images = selected_additional_images
+
+        db.session.commit()
+        flash('投稿が更新されました。', 'success')
+        return redirect(url_for('blog_admin_bp.list_posts'))
+
+    return render_template('posts/edit_post.html', form=form, post=post, title='投稿編集', is_edit=True) 
+
+@bp.route('/posts/delete/<uuid:post_id>', methods=['POST'])
+@login_required
+@roles_required(['admin', 'editor', 'poster'])
+def delete_post(post_id):
+    post_to_delete = db.session.get(Post, post_id)
+    if not post_to_delete:
+        flash('投稿が見つかりません。', 'danger')
+        return redirect(url_for('blog_admin_bp.list_posts'))
+
+    # 投稿の所有者または管理者のみが削除可能
+    if not (current_user.has_role('admin') or post_to_delete.user_id == current_user.id):
+        flash('この投稿を削除する権限がありません。', 'danger')
+        return redirect(url_for('blog_admin_bp.list_posts'))
+    try:
+        # 関連する画像 (main_imageとadditional_images) の is_main_image フラグを適切に処理
+        # cascade='all, delete-orphan' により、関連するコメントは自動的に削除される
+        # 画像については、Postに紐づいているImageレコードは削除されるが、
+        # 物理ファイルは別途処理する必要がある（ここでは省略）
+
+        db.session.delete(post_to_delete) 
+        db.session.commit()
+        flash('投稿が削除されました。', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'投稿の削除中にエラーが発生しました: {e}', 'danger')
+
+    return redirect(url_for('blog_admin_bp.list_posts'))
+
+# 新しいルート: 投稿の公開/非公開を切り替える
+@bp.route('/posts/toggle_publish/<uuid:post_id>', methods=['POST'])
+@login_required
+@roles_required(['admin', 'editor', 'poster'])
+def toggle_publish(post_id):
+    post = db.session.get(Post, post_id)
+    if not post:
+        flash('投稿が見つかりません。', 'danger')
+        return redirect(url_for('blog_admin_bp.list_posts'))
+
+    if post.user_id != current_user.id and not current_user.has_role('admin'):
+        flash('この投稿の公開状態を変更する権限がありません。', 'danger')
+        return redirect(url_for('blog_admin_bp.list_posts'))
+
+    post.is_published = not post.is_published
+    db.session.commit()
+    flash(f"投稿 '{post.title}' の公開状態が{'公開' if post.is_published else '非公開'}に切り替わりました。", 'success')
+    return redirect(url_for('blog_admin_bp.list_posts'))
+
+# --- カテゴリ管理 ---
+@bp.route('/categories')
+@login_required
+@roles_required(['admin', 'editor', 'poster'])
+def list_categories():
+    if current_user.has_role('admin'):
+        categories = Category.query.order_by(Category.name.asc()).all()
+    else:
+        # admin 以外のユーザーは自分のカテゴリのみ表示
+        categories = Category.query.filter_by(user_id=current_user.id).order_by(Category.name.asc()).all()
+    return render_template('categories/list_categories.html', categories=categories, title='カテゴリ管理') # 'admin/categories/list_categories.html' -> 'categories/list_categories.html'
+
+@bp.route('/categories/add', methods=['GET', 'POST'])
+@login_required
+@roles_required(['admin', 'editor', 'poster'])
+def add_category():
+    form = CategoryForm()
+    if form.validate_on_submit():
+        slug = slugify(form.slug.data) if form.slug.data else slugify(form.name.data)
+        category = Category(name=form.name.data, slug=slug, description=form.description.data, user_id=current_user.id)
+        db.session.add(category)
+        db.session.commit()
+        flash('新しいカテゴリが追加されました。', 'success')
+        return redirect(url_for('blog_admin_bp.list_categories'))
+    return render_template('categories/add_edit_category.html', form=form, title='カテゴリ追加', is_edit=False) # 'admin/categories/add_edit_category.html' -> 'categories/add_edit_category.html'
+
+@bp.route('/categories/edit/<uuid:category_id>', methods=['GET', 'POST'])
+@login_required
+@roles_required(['admin', 'editor', 'poster'])
+def edit_category(category_id):
+    category = db.session.get(Category, category_id)
+    if category is None:
+        flash('カテゴリが見つかりません。', 'danger')
+        return redirect(url_for('blog_admin_bp.list_categories'))
+    
+    # カテゴリの所有者または管理者のみが編集可能
+    if not (current_user.has_role('admin') or category.user_id == current_user.id):
+        flash('このカテゴリを編集する権限がありません。', 'danger')
+        return redirect(url_for('blog_admin_bp.list_categories'))
+
+    form = CategoryForm(obj=category)
+    if form.validate_on_submit():
+        category.name = form.name.data
+        category.slug = slugify(form.slug.data) if form.slug.data else slugify(form.name.data)
+        category.description = form.description.data
+        db.session.commit()
+        flash('カテゴリが更新されました。', 'success')
+        return redirect(url_for('blog_admin_bp.list_categories'))
+    elif request.method == 'GET':
+        form.name.data = category.name
+        form.slug.data = category.slug
+        form.description.data = category.description
+    return render_template('categories/add_edit_category.html', form=form, category=category, title='カテゴリ編集', is_edit=True) # 'admin/categories/add_edit_category.html' -> 'categories/add_edit_category.html'
+
+@bp.route('/categories/delete/<uuid:category_id>', methods=['POST'])
+@login_required
+@roles_required(['admin', 'editor', 'poster'])
+def delete_category(category_id):
+    category_to_delete = db.session.get(Category, category_id)
+    if not category_to_delete:
+        flash('カテゴリが見つかりません。', 'danger')
+        return redirect(url_for('blog_admin_bp.list_categories'))
+
+    # カテゴリの所有者または管理者のみが削除可能
+    if not (current_user.has_role('admin') or category_to_delete.user_id == current_user.id):
+        flash('このカテゴリを削除する権限がありません。', 'danger')
+        return redirect(url_for('blog_admin_bp.list_categories'))
+
+    if category_to_delete.posts.count() > 0:
+        flash(f'このカテゴリにはまだ{category_to_delete.posts.count()}件の投稿が紐付いています。先にこれらの投稿のカテゴリを解除または変更してください。', 'warning')
+        return redirect(url_for('blog_admin_bp.list_categories'))
+
+    try:
+        db.session.delete(category_to_delete)
+        db.session.commit()
+        flash('カテゴリが削除されました。', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'カテゴリの削除中にエラーが発生しました: {e}', 'danger')
+
+    return redirect(url_for('blog_admin_bp.list_categories'))
+
+
+# --- タグ管理 ---
+@bp.route('/tags')
+@login_required
+@roles_required(['admin', 'editor', 'poster'])
+def list_tags():
+    if current_user.has_role('admin'):
+        tags = Tag.query.order_by(Tag.name.asc()).all()
+    else:
+        # admin 以外のユーザーは自分のタグのみ表示
+        tags = Tag.query.filter_by(user_id=current_user.id).order_by(Tag.name.asc()).all()
+    return render_template('tags/list_tags.html', tags=tags, title='タグ管理') # 'admin/tags/list_tags.html' -> 'tags/list_tags.html'
+
+@bp.route('/tags/add', methods=['GET', 'POST'])
+@login_required
+@roles_required(['admin', 'editor', 'poster'])
+def add_tag():
+    form = TagForm()
+    if form.validate_on_submit():
+        slug = slugify(form.slug.data) if form.slug.data else slugify(form.name.data)
+        tag = Tag(name=form.name.data, slug=slug, user_id=current_user.id)
+        db.session.add(tag)
+        db.session.commit()
+        flash('新しいタグが追加されました。', 'success')
+        return redirect(url_for('blog_admin_bp.list_tags'))
+    return render_template('tags/add_edit_tag.html', form=form, title='タグ追加', is_edit=False) # 'admin/tags/add_edit_tag.html' -> 'tags/add_edit_tag.html'
+
+@bp.route('/tags/edit/<uuid:tag_id>', methods=['GET', 'POST'])
+@login_required
+@roles_required(['admin', 'editor', 'poster'])
+def edit_tag(tag_id):
+    tag = db.session.get(Tag, tag_id)
+    if tag is None:
+        flash('タグが見つかりません。', 'danger')
+        return redirect(url_for('blog_admin_bp.list_tags'))
+
+    # タグの所有者または管理者のみが編集可能
+    if not (current_user.has_role('admin') or tag.user_id == current_user.id):
+        flash('このタグを編集する権限がありません。', 'danger')
+        return redirect(url_for('blog_admin_bp.list_tags'))
+
+    form = TagForm(obj=tag)
+    if form.validate_on_submit():
+        tag.name = form.name.data
+        tag.slug = slugify(form.slug.data) if form.slug.data else slugify(form.name.data)
+        db.session.commit()
+        flash('タグが更新されました。', 'success')
+        return redirect(url_for('blog_admin_bp.list_tags'))
+    elif request.method == 'GET':
+        form.name.data = tag.name
+        form.slug.data = tag.slug
+    return render_template('tags/add_edit_tag.html', form=form, tag=tag, title='タグ編集', is_edit=True) # 'admin/tags/add_edit_tag.html' -> 'tags/add_edit_tag.html'
+
+@bp.route('/tags/delete/<uuid:tag_id>', methods=['POST'])
+@login_required
+@roles_required(['admin', 'editor', 'poster'])
+def delete_tag(tag_id):
+    tag_to_delete = db.session.get(Tag, tag_id)
+    if not tag_to_delete:
+        flash('タグが見つかりません。', 'danger')
+        return redirect(url_for('blog_admin_bp.list_tags'))
+
+    # タグの所有者または管理者のみが削除可能
+    if not (current_user.has_role('admin') or tag_to_delete.user_id == current_user.id):
+        flash('このタグを削除する権限がありません。', 'danger')
+        return redirect(url_for('blog_admin_bp.list_tags'))
+
+    if tag_to_delete.posts.count() > 0:
+        flash(f'このタグにはまだ{tag_to_delete.posts.count()}件の投稿が紐付いています。先にこれらの投稿からタグを解除してください。', 'warning')
+        return redirect(url_for('blog_admin_bp.list_tags'))
+
+    try:
+        db.session.delete(tag_to_delete)
+        db.session.commit()
+        flash('タグが削除されました。', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'タグの削除中にエラーが発生しました: {e}', 'danger')
+
+    return redirect(url_for('blog_admin_bp.list_tags'))
+
+
+# --- 画像管理 ---
+@bp.route('/images')
+@login_required
+@roles_required(['admin', 'editor', 'poster'])
+def list_images():
+    if current_user.has_role('admin'):
+        images = Image.query.order_by(Image.uploaded_at.desc()).all()
+    else:
+        images = Image.query.filter_by(user_id=current_user.id).order_by(Image.uploaded_at.desc()).all()
+    return render_template('images/list_images.html', images=images, title='画像管理') # 'admin/images/list_images.html' -> 'images/list_images.html'
+
+@bp.route('/images/upload', methods=['GET', 'POST'])
+@login_required
+@roles_required(['admin', 'editor', 'poster'])
+def upload_image():
+    form = ImageUploadForm()
+    if form.validate_on_submit():
+        image_file = form.image_file.data
+        if image_file and allowed_file(image_file.filename):
+            original_filename = secure_filename(image_file.filename)
+            unique_filename = str(uuid.uuid4()) + os.path.splitext(original_filename)[1]
+            filepath = os.path.join(current_app.config['UPLOAD_FOLDER'], 'images', unique_filename)
+            image_file.save(filepath)
+
+            # サムネイル生成
+            thumbnail_filename = 'thumb_' + unique_filename
+            thumbnail_filepath = os.path.join(current_app.config['UPLOAD_FOLDER'], 'thumbnails', thumbnail_filename)
+            try:
+                img_pil = PilImage.open(filepath)
+                img_pil.thumbnail(THUMBNAIL_SIZE)
+                img_pil.save(thumbnail_filepath)
+            except Exception as e:
+                current_app.logger.error(f"サムネイル生成中にエラーが発生しました: {e}")
+                thumbnail_filename = None
+                thumbnail_filepath = None
+            
+            new_image = Image(
+                original_filename=original_filename,
+                unique_filename=unique_filename,
+                thumbnail_filename=thumbnail_filename,
+                filepath=f'uploads/images/{unique_filename}',
+                thumbnail_filepath=f'uploads/thumbnails/{thumbnail_filename}' if thumbnail_filename else None,
+                user_id=current_user.id,
+                alt_text=form.alt_text.data
+            )
+            db.session.add(new_image)
             db.session.commit()
             flash('画像が正常にアップロードされました。', 'success')
+            return redirect(url_for('blog_admin_bp.list_images'))
         else:
-            flash('画像のアップロードに失敗しました。許可されていないファイル形式かもしれません。', 'error')
-        return redirect(url_for('blog_admin_bp.image_management'))
+            flash('無効なファイル形式です。', 'danger')
+    return render_template('images/upload_image.html', form=form, title='画像アップロード') # 'admin/images/upload_image.html' -> 'images/upload_image.html'
 
-    images = Image.query.order_by(Image.uploaded_at.desc()).all()
-    return render_template('admin/image_management.html', images=images, form=form, CsrfOnlyForm=CsrfOnlyForm)
-
-# 画像削除 (CSRF保護あり)
-@blog_admin_bp.route('/delete_image/<uuid:image_id>', methods=['POST'])
+@bp.route('/images/bulk_upload', methods=['GET', 'POST'])
 @login_required
-# @roles_required(['admin', 'editor'])
-def delete_image(image_id):
-    form = CsrfOnlyForm()
+@roles_required(['admin', 'editor', 'poster'])
+def bulk_upload_images():
+    form = BulkImageUploadForm()
     if form.validate_on_submit():
-        image = Image.query.get_or_404(str(image_id))
+        uploaded_count = 0
+        failed_count = 0
+        for image_file in form.image_files.data:
+            if image_file and allowed_file(image_file.filename):
+                original_filename = secure_filename(image_file.filename)
+                unique_filename = str(uuid.uuid4()) + os.path.splitext(original_filename)[1]
+                filepath = os.path.join(current_app.config['UPLOAD_FOLDER'], 'images', unique_filename)
+                
+                try:
+                    image_file.save(filepath)
+
+                    # サムネイル生成
+                    thumbnail_filename = 'thumb_' + unique_filename
+                    thumbnail_filepath = os.path.join(current_app.config['UPLOAD_FOLDER'], 'thumbnails', thumbnail_filename)
+                    try:
+                        img_pil = PilImage.open(filepath)
+                        img_pil.thumbnail(THUMBNAIL_SIZE)
+                        img_pil.save(thumbnail_filepath)
+                    except Exception as e:
+                        current_app.logger.error(f"バルクアップロード中にサムネイル生成エラー: {original_filename} - {e}")
+                        thumbnail_filename = None
+                        thumbnail_filepath = None
+
+                    new_image = Image(
+                        original_filename=original_filename,
+                        unique_filename=unique_filename,
+                        thumbnail_filename=thumbnail_filename,
+                        filepath=f'uploads/images/{unique_filename}',
+                        thumbnail_filepath=f'uploads/thumbnails/{thumbnail_filename}' if thumbnail_filename else None,
+                        user_id=current_user.id,
+                        alt_text="" # バルクアップロードではalt_textは空にするか、後で編集させる
+                    )
+                    db.session.add(new_image)
+                    uploaded_count += 1
+                except Exception as e:
+                    current_app.logger.error(f"バルクアップロード中にファイル保存エラー: {original_filename} - {e}")
+                    failed_count += 1
+            else:
+                failed_count += 1
         
-        # 物理ファイルの削除
-        try:
-            os.remove(os.path.join(current_app.config['UPLOAD_FOLDER'], image.filename))
-        except FileNotFoundError:
-            current_app.logger.warning(f"Image file not found for deletion: {image.filename}")
-        
-        db.session.delete(image)
-        db.session.commit()
-        flash('画像を削除しました。', 'success')
-    else:
-        flash('無効なリクエストです。', 'error')
-    return redirect(url_for('blog_admin_bp.image_management'))
-
-# ====================================================================
-# QRコード管理
-# ====================================================================
-
-# QRコード一覧と作成 (Gistのqr_code_managementをベース)
-@blog_admin_bp.route('/qr_code_management', methods=['GET', 'POST'])
-@login_required
-# @roles_required(['admin'])
-def qr_code_management():
-    form = QRForm() # QRFormが定義されていることを前提とする
-
-    if form.validate_on_submit():
-        url = form.url.data
-        qr_filename = f"qr_{uuid.uuid4()}.png"
-        qr_filepath = os.path.join(current_app.root_path, 'static', 'qrcodes', qr_filename) # static/qrcodesに保存
-
-        # QRコード生成
-        qr = qrcode.QRCode(
-            version=1,
-            error_correction=qrcode.constants.ERROR_CORRECT_L,
-            box_size=10,
-            border=4,
-        )
-        qr.add_data(url)
-        qr.make(fit=True)
-
-        img = qr.make_image(fill_color="black", back_color="white")
-        
-        # ディレクトリが存在しない場合は作成
-        os.makedirs(os.path.dirname(qr_filepath), exist_ok=True)
-        img.save(qr_filepath)
-
-        new_qr = QR(
-            name=form.name.data,
-            url=url,
-            qr_image_filename=qr_filename
-        )
-        db.session.add(new_qr)
-        db.session.commit()
-        flash('QRコードが正常に作成されました。', 'success')
-        return redirect(url_for('blog_admin_bp.qr_code_management'))
-
-    qrs = QR.query.all()
-    return render_template('admin/qr_code_management.html', qrs=qrs, form=form, CsrfOnlyForm=CsrfOnlyForm)
-
-# QRコード削除 (CSRF保護あり)
-@blog_admin_bp.route('/delete_qr/<int:qr_id>', methods=['POST'])
-@login_required
-# @roles_required(['admin'])
-def delete_qr(qr_id):
-    form = CsrfOnlyForm()
-    if form.validate_on_submit():
-        qr_code = QR.query.get_or_404(qr_id)
-        
-        # 物理ファイルを削除
-        qr_filepath = os.path.join(current_app.root_path, 'static', 'qrcodes', qr_code.qr_image_filename)
-        try:
-            os.remove(qr_filepath)
-        except FileNotFoundError:
-            current_app.logger.warning(f"QR code image file not found for deletion: {qr_filepath}")
-        
-        db.session.delete(qr_code)
-        db.session.commit()
-        flash('QRコードを削除しました。', 'success')
-    else:
-        flash('無効なリクエストです。', 'error')
-    return redirect(url_for('blog_admin_bp.qr_code_management'))
-
-
-# ====================================================================
-# 一般設定 (Gistのsettingsをベース)
-# ====================================================================
-@blog_admin_bp.route('/settings')
-@login_required
-# @roles_required(['admin']) # 管理者のみアクセス可能
-def settings():
-    # ここに設定情報をロードするロジック
-    # 例: general_settings = load_settings_from_db()
-    flash('設定管理機能は未実装です。', 'info')
-    return render_template('admin/settings.html')
-
-
-# ====================================================================
-# お問い合わせ管理 (Gistのcontact_messagesをベース)
-# ====================================================================
-
-# お問い合わせメッセージ一覧 (Gistのcontact_messagesをベース)
-@blog_admin_bp.route('/contact_messages')
-@login_required
-# @roles_required(['admin', 'editor'])
-def contact_messages():
-    # 仮のメッセージリスト。実際にはデータベースから取得
-    # messages = ContactMessage.query.order_by(ContactMessage.created_at.desc()).all()
-    messages = [] # 仮に空リスト
-    flash('お問い合わせメッセージ管理機能は未実装です。', 'info')
-    return render_template('admin/contact_messages.html', messages=messages)
-
-# お問い合わせメッセージ詳細 (Gistのcontact_message_detailをベース)
-@blog_admin_bp.route('/contact_message/<int:message_id>')
-@login_required
-# @roles_required(['admin', 'editor'])
-def contact_message_detail(message_id):
-    # message = ContactMessage.query.get_or_404(message_id)
-    message = None # 仮にNone
-    flash(f'お問い合わせメッセージ ID: {message_id} の詳細機能は未実装です。', 'info')
-    return render_template('admin/contact_message_detail.html', message=message)
-
-# お問い合わせメッセージ削除 (Gistのdelete_contact_messageをベースにCSRF保護追加)
-@blog_admin_bp.route('/delete_contact_message/<int:message_id>', methods=['POST'])
-@login_required
-# @roles_required(['admin'])
-def delete_contact_message(message_id):
-    form = CsrfOnlyForm()
-    if form.validate_on_submit():
-        # message = ContactMessage.query.get_or_404(message_id)
-        # db.session.delete(message)
-        # db.session.commit()
-        flash('お問い合わせメッセージを削除しました。（機能は未実装）', 'success')
-    else:
-        flash('無効なリクエストです。', 'error')
-    return redirect(url_for('blog_admin_bp.contact_messages'))
-
-# ====================================================================
-# ファイルとメディア
-# ====================================================================
-
-# 一括アップロードフォームの表示 (Gistのshow_bulk_upload_formをベース)
-# ※ 実際のアップロード処理は別途実装が必要です。これはフォーム表示のみ。
-@blog_admin_bp.route('/bulk_upload_form')
-@login_required
-# @roles_required(['admin', 'editor', 'poster'])
-def show_bulk_upload_form():
-    flash('一括アップロードフォーム機能は未実装です。', 'info')
-    return render_template('admin/bulk_upload_form.html', form=CsrfOnlyForm())
-
-# アップロードされたファイルを提供するエンドポイント (Gistのuploaded_fileをベース)
-# これはBluePrintの外、アプリケーションのルートに定義されることが多いですが、
-# Gistの構造に合わせてここに仮で配置します。必要に応じて app/__init__.py などに移動してください。
-@blog_admin_bp.route('/uploads/<path:filename>')
-def uploaded_file(filename):
-    return send_from_directory(current_app.config['UPLOAD_FOLDER'], filename)
-
-# ====================================================================
-# APIエンドポイント (Gistのget_post_data, update_post_statusをベース)
-# ====================================================================
-
-# 単一投稿のデータを取得するAPIエンドポイント
-@blog_admin_bp.route('/api/posts/<uuid:post_id>', methods=['GET'])
-@login_required
-def get_post_data(post_id):
-    post = Post.query.get(str(post_id))
-    if not post:
-        return jsonify({'error': 'Post not found'}), 404
-    
-    # 投稿オブジェクトを辞書に変換してJSONで返す (必要に応じて詳細化)
-    return jsonify({
-        'id': post.id,
-        'title': post.title,
-        'body': post.body,
-        'is_published': post.is_published,
-        'created_at': post.created_at.isoformat(),
-        'updated_at': post.updated_at.isoformat() if post.updated_at else None,
-        'category': post.category.name if post.category else '未分類',
-        'tags': [tag.name for tag in post.tags],
-        'main_image_url': post.main_image.url if post.main_image else None
-    })
-
-# 投稿のステータス（公開/下書き）を更新するAPIエンドポイント (Gistのupdate_post_statusをベース)
-@blog_admin_bp.route('/api/posts/<uuid:post_id>/status', methods=['PUT'])
-@login_required
-# @roles_required(['admin', 'editor', 'poster']) # APIも権限で保護
-def update_post_status(post_id):
-    data = request.get_json()
-    if not data or 'is_published' not in data:
-        return jsonify({'error': 'Invalid request data'}), 400
-
-    post = Post.query.get(str(post_id))
-    if not post:
-        return jsonify({'error': 'Post not found'}), 404
-
-    # 投稿者自身か管理者のみ更新可能
-    if not (current_user.id == post.user_id or (current_user.role and current_user.role.name == 'admin')):
-        return jsonify({'error': 'Permission denied'}), 403
-
-    post.is_published = data['is_published']
-    db.session.commit()
-    return jsonify({'message': 'Post status updated successfully', 'is_published': post.is_published})
-
-# ====================================================================
-# その他 (Gistのその他の部分)
-# ====================================================================
-
-# ファイルのアップロードと表示 (Gistのupload_fileをベース、image_managementと重複する可能性あり)
-@blog_admin_bp.route('/upload_file', methods=['GET', 'POST'])
-@login_required
-# @roles_required(['admin', 'editor', 'poster'])
-def upload_file():
-    form = ImageUploadForm() # ImageUploadFormを使用
-    if form.validate_on_submit():
-        new_image = _save_image(form.image_file.data)
-        if new_image:
+        if uploaded_count > 0:
             db.session.commit()
-            flash('ファイルが正常にアップロードされました。', 'success')
-            return redirect(url_for('blog_admin_bp.uploaded_file', filename=new_image.filename)) # uploaded_fileへリダイレクト
-        else:
-            flash('ファイルのアップロードに失敗しました。', 'error')
-    return render_template('admin/upload_file.html', form=form) # upload_file.htmlテンプレートが必要
+            flash(f'{uploaded_count}個の画像を正常にアップロードしました。', 'success')
+        if failed_count > 0:
+            flash(f'{failed_count}個の画像のアップロードに失敗しました（無効なファイル形式またはエラー）。', 'danger')
+        
+        return redirect(url_for('blog_admin_bp.list_images'))
+    return render_template('images/bulk_upload_images.html', form=form, title='一括画像アップロード') # 'admin/images/bulk_upload_images.html' -> 'images/bulk_upload_images.html'
 
 
-# ====================================================================
-# エラーハンドリング (Gistにはないが、追加)
-# ====================================================================
-@blog_admin_bp.app_errorhandler(403)
-def forbidden(e):
-    return render_template('errors/403.html'), 403
+@bp.route('/images/edit/<uuid:image_id>', methods=['GET', 'POST'])
+@login_required
+@roles_required(['admin', 'editor', 'poster'])
+def edit_image(image_id):
+    image = db.session.get(Image, image_id)
+    if image is None:
+        flash('画像が見つかりません。', 'danger')
+        return redirect(url_for('blog_admin_bp.list_images'))
+    
+    # 画像の所有者または管理者のみが編集可能
+    if not (current_user.has_role('admin') or image.user_id == current_user.id):
+        flash('この画像を編集する権限がありません。', 'danger')
+        return redirect(url_for('blog_admin_bp.list_images'))
 
-@blog_admin_bp.app_errorhandler(404)
-def page_not_found(e):
-    return render_template('errors/404.html'), 404
+    form = ImageUploadForm(obj=image) # ImageUploadFormを再利用
+    # ImageUploadFormにはimage_fileフィールドがあるが、編集時は使わないのでバリデータを削除
+    form.image_file.validators = [Optional(), FileAllowed(['jpg', 'jpeg', 'png', 'gif', 'webp'], '画像ファイル (JPG, JPEG, PNG, GIF, WEBP) のみ許可されます')]
 
-@blog_admin_bp.app_errorhandler(500)
-def internal_server_error(e):
-    return render_template('errors/500.html'), 500
+
+    if form.validate_on_submit():
+        # alt_textのみ更新
+        image.alt_text = form.alt_text.data
+        db.session.commit()
+        flash('画像情報が更新されました。', 'success')
+        return redirect(url_for('blog_admin_bp.list_images'))
+    elif request.method == 'GET':
+        form.alt_text.data = image.alt_text
+
+    return render_template('images/edit_image.html', form=form, image=image, title='画像編集') # 'admin/images/edit_image.html' -> 'images/edit_image.html'
+
+
+@bp.route('/images/delete/<uuid:image_id>', methods=['POST'])
+@login_required
+@roles_required(['admin', 'editor', 'poster'])
+def delete_image(image_id):
+    image_to_delete = db.session.get(Image, image_id)
+    if not image_to_delete:
+        flash('画像が見つかりません。', 'danger')
+        return redirect(url_for('blog_admin_bp.list_images'))
+    
+    # 画像の所有者または管理者のみが削除可能
+    if not (current_user.has_role('admin') or image_to_delete.user_id == current_user.id):
+        flash('この画像を削除する権限がありません。', 'danger')
+        return redirect(url_for('blog_admin_bp.list_images'))
+
+    # メイン画像として使用されているか確認
+    if image_to_delete.post_as_main_image: # backrefから確認
+        flash('この画像は投稿のメイン画像として使用されています。先に投稿から画像を解除してください。', 'warning')
+        return redirect(url_for('blog_admin_bp.list_images'))
+
+    # 追加画像として使用されているか確認 (多対多リレーションシップの場合)
+    if image_to_delete.posts_as_additional_image.count() > 0:
+        flash('この画像は複数の投稿の追加画像として使用されています。先に投稿から画像を解除してください。', 'warning')
+        return redirect(url_for('blog_admin_bp.list_images'))
+
+    try:
+        # 物理ファイルの削除
+        if image_to_delete.filepath and os.path.exists(image_to_delete.filepath):
+            os.remove(image_to_delete.filepath)
+        if image_to_delete.thumbnail_filepath and os.path.exists(image_to_delete.thumbnail_filepath):
+            os.remove(image_to_delete.thumbnail_filepath)
+
+        db.session.delete(image_to_delete)
+        db.session.commit()
+        flash('画像が削除されました。', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'画像の削除中にエラーが発生しました: {e}', 'danger')
+
+    return redirect(url_for('blog_admin_bp.list_images'))
+
+
+# --- コメント管理 ---
+@bp.route('/comments')
+@login_required
+@roles_required(['admin']) # コメント管理は通常adminのみ
+def list_comments():
+    comments = Comment.query.order_by(Comment.created_at.desc()).all()
+    return render_template('comments/list_comments.html', comments=comments, title='コメント管理') # 'admin/comments/list_comments.html' -> 'comments/list_comments.html'
+
+
+@bp.route('/comments/edit/<uuid:comment_id>', methods=['GET', 'POST'])
+@login_required
+@roles_required(['admin'])
+def edit_comment(comment_id):
+    comment = db.session.get(Comment, comment_id)
+    if not comment:
+        flash('コメントが見つかりません。', 'danger')
+        return redirect(url_for('blog_admin_bp.list_comments'))
+
+    form = AdminCommentForm(obj=comment) # ← CommentForm から AdminCommentForm に変更
+
+    if form.validate_on_submit():
+        comment.body = form.body.data
+        comment.is_approved = form.approved.data
+        db.session.commit()
+        flash('コメントが更新されました。', 'success')
+        return redirect(url_for('blog_admin_bp.list_comments'))
+    elif request.method == 'GET':
+        form.body.data = comment.body
+        form.approved.data = comment.is_approved
+    
+    return render_template('comments/edit_comment.html', form=form, comment=comment, title='コメント編集')
+
+@bp.route('/comments/delete/<uuid:comment_id>', methods=['POST']) # 追加: コメント削除ルート
+@login_required
+@roles_required(['admin'])
+def delete_comment(comment_id):
+    comment_to_delete = db.session.get(Comment, comment_id)
+    if not comment_to_delete:
+        flash('コメントが見つかりません。', 'danger')
+        return redirect(url_for('blog_admin_bp.list_comments'))
+
+    try:
+        db.session.delete(comment_to_delete)
+        db.session.commit()
+        flash('コメントが削除されました。', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'コメントの削除中にエラーが発生しました: {e}', 'danger')
+
+    return redirect(url_for('blog_admin_bp.list_comments'))
