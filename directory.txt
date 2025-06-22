@@ -5,6 +5,7 @@ F:.
 │  20250608主要ファイル内容.txt
 │  config.py
 │  directory.txt
+│  Flask_URL_Map.txt
 │  git
 │  image.csv
 │  post.csv
@@ -47,7 +48,7 @@ F:.
 │  │  │  │  index.html
 │  │  │  │  
 │  │  │  ├─categories
-│  │  │  │      manage_categories.html
+│  │  │  │      add_edit_category.html
 │  │  │  │      
 │  │  │  ├─comments
 │  │  │  │      edit_comment.html
@@ -67,18 +68,21 @@ F:.
 │  │  │  │      post_list.html
 │  │  │  │      
 │  │  │  ├─roles
+│  │  │  │      add_edit_role.html
 │  │  │  │      edit_role.html
 │  │  │  │      manage_roles.html
 │  │  │  │      new_role.html
 │  │  │  │      
 │  │  │  ├─tags
+│  │  │  │      add_edit_tag.html
 │  │  │  │      manage_tags.html
 │  │  │  │      
 │  │  │  └─users
+│  │  │          add_edit_user.html
 │  │  │          add_user.html
 │  │  │          change_user_role.html
 │  │  │          edit_user.html
-│  │  │          manage_users.html
+│  │  │          list_users.html
 │  │  │          
 │  │  └─__pycache__
 │  │          forms.cpython-312.pyc
@@ -9734,12 +9738,14 @@ F:.
 │  │  │  9bc43c7b1009_initial_migration_after_reset.py
 │  │  │  c079d47a50c4_rename_comment_content_to_comment_body.py
 │  │  │  c2267510372f_add_additional_images_relationship_to_.py
+│  │  │  e575575908b8_add_description_to_tag_model.py
 │  │  │  
 │  │  └─__pycache__
 │  │          554730c19b9a_add_qr_model.cpython-312.pyc
 │  │          9bc43c7b1009_initial_migration_after_reset.cpython-312.pyc
 │  │          c079d47a50c4_rename_comment_content_to_comment_body.cpython-312.pyc
 │  │          c2267510372f_add_additional_images_relationship_to_.cpython-312.pyc
+│  │          e575575908b8_add_description_to_tag_model.cpython-312.pyc
 │  │          
 │  └─__pycache__
 │          env.cpython-312.pyc

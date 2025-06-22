@@ -1,0 +1,48 @@
+--- Flask URL Map ---
+Endpoint: static, Methods: {'OPTIONS', 'GET', 'HEAD'}, Rule: /static/<path:filename>
+Endpoint: home.index, Methods: {'OPTIONS', 'GET', 'HEAD'}, Rule: /index
+Endpoint: home.index, Methods: {'OPTIONS', 'GET', 'HEAD'}, Rule: /
+Endpoint: home.post_detail, Methods: {'OPTIONS', 'POST', 'GET', 'HEAD'}, Rule: /post/<uuid:post_id>
+Endpoint: home.posts_by_category, Methods: {'OPTIONS', 'GET', 'HEAD'}, Rule: /category/<uuid:category_id>
+Endpoint: home.posts_by_tag, Methods: {'OPTIONS', 'GET', 'HEAD'}, Rule: /tag/<uuid:tag_id>       
+Endpoint: home.search_results, Methods: {'OPTIONS', 'GET', 'HEAD'}, Rule: /search
+Endpoint: auth.login, Methods: {'OPTIONS', 'POST', 'GET', 'HEAD'}, Rule: /auth/login
+Endpoint: auth.register, Methods: {'OPTIONS', 'POST', 'GET', 'HEAD'}, Rule: /auth/register       
+Endpoint: auth.logout, Methods: {'OPTIONS', 'GET', 'HEAD'}, Rule: /auth/logout
+Endpoint: public_posts.list_posts, Methods: {'OPTIONS', 'GET', 'HEAD'}, Rule: /posts/list        
+Endpoint: public_posts.list_posts, Methods: {'OPTIONS', 'GET', 'HEAD'}, Rule: /posts/
+Endpoint: blog_admin_bp.static, Methods: {'OPTIONS', 'GET', 'HEAD'}, Rule: /admin/static/<path:filename>
+Endpoint: blog_admin_bp.index, Methods: {'OPTIONS', 'GET', 'HEAD'}, Rule: /admin/index
+Endpoint: blog_admin_bp.index, Methods: {'OPTIONS', 'GET', 'HEAD'}, Rule: /admin/
+Endpoint: blog_admin_bp.list_users, Methods: {'OPTIONS', 'GET', 'HEAD'}, Rule: /admin/users      
+Endpoint: blog_admin_bp.add_user, Methods: {'OPTIONS', 'POST', 'GET', 'HEAD'}, Rule: /admin/users/add
+Endpoint: blog_admin_bp.edit_user, Methods: {'OPTIONS', 'POST', 'GET', 'HEAD'}, Rule: /admin/users/edit/<uuid:user_id>
+Endpoint: blog_admin_bp.delete_user, Methods: {'OPTIONS', 'POST'}, Rule: /admin/users/delete/<uuid:user_id>
+Endpoint: blog_admin_bp.manage_roles, Methods: {'OPTIONS', 'GET', 'HEAD'}, Rule: /admin/roles    
+Endpoint: blog_admin_bp.add_role, Methods: {'OPTIONS', 'POST', 'GET', 'HEAD'}, Rule: /admin/roles/add
+Endpoint: blog_admin_bp.edit_role, Methods: {'OPTIONS', 'POST', 'GET', 'HEAD'}, Rule: /admin/roles/edit/<int:role_id>
+Endpoint: blog_admin_bp.delete_role, Methods: {'OPTIONS', 'POST'}, Rule: /admin/roles/delete/<int:role_id>
+Endpoint: blog_admin_bp.list_posts, Methods: {'OPTIONS', 'GET', 'HEAD'}, Rule: /admin/posts      
+Endpoint: blog_admin_bp.new_post, Methods: {'OPTIONS', 'POST', 'GET', 'HEAD'}, Rule: /admin/posts/new
+Endpoint: blog_admin_bp.edit_post, Methods: {'OPTIONS', 'POST', 'GET', 'HEAD'}, Rule: /admin/posts/edit/<uuid:post_id>
+Endpoint: blog_admin_bp.delete_post, Methods: {'OPTIONS', 'POST'}, Rule: /admin/posts/delete/<uuid:post_id>
+Endpoint: blog_admin_bp.toggle_publish, Methods: {'OPTIONS', 'POST'}, Rule: /admin/posts/toggle_publish/<uuid:post_id>
+Endpoint: blog_admin_bp.list_categories, Methods: {'OPTIONS', 'GET', 'HEAD'}, Rule: /admin/categories
+Endpoint: blog_admin_bp.add_category, Methods: {'OPTIONS', 'POST', 'GET', 'HEAD'}, Rule: /admin/categories/add
+Endpoint: blog_admin_bp.edit_category, Methods: {'OPTIONS', 'POST', 'GET', 'HEAD'}, Rule: /admin/categories/edit/<uuid:category_id>
+Endpoint: blog_admin_bp.delete_category, Methods: {'OPTIONS', 'POST'}, Rule: /admin/categories/delete/<uuid:category_id>
+Endpoint: blog_admin_bp.list_tags, Methods: {'OPTIONS', 'GET', 'HEAD'}, Rule: /admin/tags        
+Endpoint: blog_admin_bp.add_tag, Methods: {'OPTIONS', 'POST', 'GET', 'HEAD'}, Rule: /admin/tags/add
+Endpoint: blog_admin_bp.edit_tag, Methods: {'OPTIONS', 'POST', 'GET', 'HEAD'}, Rule: /admin/tags/edit/<uuid:tag_id>
+Endpoint: blog_admin_bp.delete_tag, Methods: {'OPTIONS', 'POST'}, Rule: /admin/tags/delete/<uuid:tag_id>
+Endpoint: blog_admin_bp.list_images, Methods: {'OPTIONS', 'GET', 'HEAD'}, Rule: /admin/images    
+Endpoint: blog_admin_bp.upload_image, Methods: {'OPTIONS', 'POST', 'GET', 'HEAD'}, Rule: /admin/images/upload
+Endpoint: blog_admin_bp.bulk_upload_images, Methods: {'OPTIONS', 'POST', 'GET', 'HEAD'}, Rule: /admin/images/bulk_upload
+Endpoint: blog_admin_bp.edit_image, Methods: {'OPTIONS', 'POST', 'GET', 'HEAD'}, Rule: /admin/images/edit/<uuid:image_id>
+Endpoint: blog_admin_bp.delete_image, Methods: {'OPTIONS', 'POST'}, Rule: /admin/images/delete/<uuid:image_id>
+Endpoint: blog_admin_bp.list_comments, Methods: {'OPTIONS', 'GET', 'HEAD'}, Rule: /admin/comments
+Endpoint: blog_admin_bp.edit_comment, Methods: {'OPTIONS', 'POST', 'GET', 'HEAD'}, Rule: /admin/comments/edit/<uuid:comment_id>
+Endpoint: blog_admin_bp.delete_comment, Methods: {'OPTIONS', 'POST'}, Rule: /admin/comments/delete/<uuid:comment_id>
+Endpoint: serve_uploads, Methods: {'OPTIONS', 'GET', 'HEAD'}, Rule: /uploads/images/<path:filename>
+Endpoint: serve_thumbnails, Methods: {'OPTIONS', 'GET', 'HEAD'}, Rule: /uploads/thumbnails/<path:filename>
+---------------------

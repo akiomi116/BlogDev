@@ -1,21 +1,23 @@
+{# F:\dev\BrogDev\app\templates\base.html #}
+
 <!doctype html>
 <html lang="ja">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     
-    {# ページのタイトル。子テンプレートで定義されない場合は「My Blog」がデフォルトになります。 #}
+    {# ページのタイトル。子テンプレートで定義されない場合は「Akiomi's Blog」がデフォルトになります。 #}
     <title>{% block title %}Akiomi's Blog{% endblock %}</title>
     
     {# Bootstrap 5 CSS - CDNから直接読み込みます #}
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
              rel="stylesheet" 
-             integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" 
+             xintegrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" 
              crossorigin="anonymous">
     
     {# Font Awesome CSS (Icons) - CDNから直接読み込みます #}
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" 
-             integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" 
+             xintegrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" 
              crossorigin="anonymous" 
              referrerpolicy="no-referrer" />
 
@@ -75,8 +77,8 @@
                         <a class="nav-link" href="{{ url_for('home.index') }}">記事一覧</a>
                     </li>
                     {#<li class="nav-item">
-                            ここが public_posts ブループリントの投稿一覧へのリンクです 
-                        <a class="nav-link" href="{{ url_for('public_posts.list_posts') }}">投稿一覧</a>
+                            ここが public_posts ブループリントの記事一覧へのリンクです 
+                        <a class="nav-link" href="{{ url_for('public_posts.list_posts') }}">記事一覧</a>
                     </li>#}
                     
                     {# Flask-Adminの管理リンクをドロップダウンメニューに集約 #}
@@ -97,6 +99,10 @@
                             <li><a class="dropdown-item" href="{{ url_for('blog_admin_bp.list_comments') }}"><i class="fas fa-comments me-2"></i> コメント管理</a></li>
                             {# 画像管理のリンクを修正 #}
                             <li><a class="dropdown-item" href="{{ url_for('blog_admin_bp.list_images') }}"><i class="fas fa-image me-2"></i> 画像管理</a></li>
+                            {# 新たに追加されたユーザー管理とロール管理へのリンク #}
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="{{ url_for('blog_admin_bp.list_users') }}"><i class="fas fa-users-cog me-2"></i> ユーザー管理</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('blog_admin_bp.manage_roles') }}"><i class="fas fa-user-tag me-2"></i> ロール管理</a></li>
                         </ul>
                     </li>
                     {% endif %}
@@ -115,24 +121,11 @@
                                     {% endif %}
                                 </a>
                                 <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarDropdown">
-                                    {# プロフィールリンクを修正 #}
-                                    <li><a class="dropdown-item" href="{{ url_for('blog_admin_bp.list_users') }}"><i class="fas fa-user me-2"></i> プロフィール</a></li>
-                                    
-                                    {# 管理者ロールを持つユーザーのみに表示される管理メニュー #}
-                                    {% if current_user.is_authenticated and current_user.role and current_user.role.name == 'admin' %}
-                                        <li><hr class="dropdown-divider"></li>
-                                        <li><h6 class="dropdown-header">管理メニュー</h6></li>
-                                        {# 管理ダッシュボードのリンクを修正 #}
-                                        <li><a class="dropdown-item" href="{{ url_for('blog_admin_bp.index') }}"><i class="fas fa-chart-line me-2"></i> 管理ダッシュボード</a></li>
-                                        <li><hr class="dropdown-divider"></li>
-                                        
-                                        {# ユーザー管理のリンクを修正 #}
-                                        <li><a class="dropdown-item" href="{{ url_for('blog_admin_bp.list_users') }}"><i class="fas fa-users-cog me-2"></i> ユーザー管理</a></li>
-                                        <li><a class="dropdown-item" href="{{ url_for('blog_admin_bp.manage_roles') }}"><i class="fas fa-user-tag me-2"></i> ロール管理</a></li>
-                                    {% endif %}
-                                    
-                                    {# 全ユーザー共通のログアウトリンク #}
+                                    {# プロフィールリンクを修正: 一般ユーザーも利用できるauth.profileに変更 #}
+                                    <li><a class="dropdown-item" href="{{ url_for('auth.profile') }}"><i class="fas fa-user me-2"></i> プロフィール</a></li>
+                                    {# ここにユーザー自身のパスワード変更など、一般ユーザー向けの項目を追加 #}
                                     <li><hr class="dropdown-divider"></li>
+                                    {# 全ユーザー共通のログアウトリンク #}
                                     <li><a class="dropdown-item text-danger" href="{{ url_for('auth.logout') }}"><i class="fas fa-sign-out-alt me-2"></i> ログアウト</a></li>
                                 </ul>
                             </li>
@@ -183,7 +176,7 @@
 
     {# Bootstrap 5 JavaScript Bundle (Popper.jsを含む) - CDNから直接読み込みます #}
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" 
-            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" 
+            xintegrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" 
             crossorigin="anonymous"></script>
 
     {# ここに子テンプレートが追加のJavaScriptを挿入できます。 #}

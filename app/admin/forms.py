@@ -45,6 +45,7 @@ class UserForm(FlaskForm):
 # --- ロール関連フォーム (管理者用) ---
 class RoleForm(FlaskForm):
     name = StringField('ロール名', validators=[DataRequired(), Length(min=2, max=50)])
+    description = TextAreaField('説明', validators=[Length(max=200)])
     submit = SubmitField('保存')
 
     def __init__(self, *args, **kwargs):
@@ -60,7 +61,7 @@ class RoleForm(FlaskForm):
             raise ValidationError('そのロール名はすでに存在します。')
 
 class DeleteRoleForm(FlaskForm):
-    pass
+    submit = SubmitField('削除')
 
 # ユーザーのロールを変更するためのフォームです。
 class UserRoleForm(FlaskForm):
@@ -155,6 +156,7 @@ class TagForm(FlaskForm):
         Length(max=128),
         Regexp(r'^[a-z0-9-]+$', message="スラッグは半角英数字とハイフンのみを使用してください。"),
     ])
+    description = TextAreaField('説明', validators=[Length(max=200)]) 
     submit = SubmitField('保存')
 
     def __init__(self, *args, **kwargs):

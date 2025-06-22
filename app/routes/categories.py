@@ -9,7 +9,7 @@ import uuid # UUID を使用する場合に備えてインポート
 # 管理機能に関する url_prefix や template_folder は設定しません。
 categories_bp = Blueprint('categories', __name__)
 
-# カテゴリごとの投稿一覧を表示するルート
+# カテゴリごとの記事一覧を表示するルート
 # URLルールは /category/<uuid:category_id> とし、UUID型のIDを受け取ります。
 @categories_bp.route('/category/<uuid:category_id>')
 def posts_by_category(category_id):

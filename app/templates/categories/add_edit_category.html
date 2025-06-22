@@ -1,0 +1,46 @@
+{% extends 'base.html' %} {# または適切な基底テンプレート #}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1>{{ title }}</h1>
+
+    <form method="POST">
+        {{ form.csrf_token }}
+
+        <div class="mb-3">
+            {{ form.name.label(class="form-label") }}
+            {{ form.name(class="form-control", placeholder="カテゴリ名を入力") }}
+            {% for error in form.name.errors %}
+                <div class="text-danger">{{ error }}</div>
+            {% endfor %}
+        </div>
+
+        <div class="mb-3">
+            {{ form.slug.label(class="form-label") }}
+            {{ form.slug(class="form-control", placeholder="URLフレンドリーなスラッグ (省略可)") }}
+            {% for error in form.slug.errors %}
+                <div class="text-danger">{{ error }}</div>
+            {% endfor %}
+        </div>
+
+        <div class="mb-3">
+            {{ form.description.label(class="form-label") }}
+            {{ form.description(class="form-control", rows="3", placeholder="カテゴリの説明 (省略可)") }}
+            {% for error in form.description.errors %}
+                <div class="text-danger">{{ error }}</div>
+            {% endfor %}
+        </div>
+
+        <button type="submit" class="btn btn-primary">
+            {% if is_edit %}
+                カテゴリを更新
+            {% else %}
+                カテゴリを作成
+            {% endif %}
+        </button>
+        <a href="{{ url_for('blog_admin_bp.list_categories') }}" class="btn btn-secondary">キャンセル</a>
+    </form>
+</div>
+{% endblock %}

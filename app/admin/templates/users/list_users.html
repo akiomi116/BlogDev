@@ -33,28 +33,21 @@
             </tr>
         </thead>
         <tbody>
-            {% for user in users %}
+            {% for item in users %} {# ここを 'user' から 'item' に変更 #}
             <tr>
-                <td>{{ user.id }}</td>
-                <td>{{ user.username }}</td>
-                <td>{{ user.email }}</td>
+                <td>{{ item.user.id }}</td>           {# item.user.id に変更 #}
+                <td>{{ item.user.username }}</td>    {# item.user.username に変更 #}
+                <td>{{ item.user.email }}</td>       {# item.user.email に変更 #}
                 <td>
-                    {# ロールが複数ある場合はカンマ区切りで表示 #}
-                    {% if user.roles %}
-                        {% for role in user.roles %}
-                            <span class="badge bg-info me-1">{{ role.name }}</span>
-                        {% endfor %}
-                    {% else %}
-                        <span class="badge bg-secondary">なし</span>
-                    {% endif %}
+                    {# ロールは item.role_name を直接表示 #}
+                    <span class="badge bg-info me-1">{{ item.role_name }}</span>
                 </td>
-                <td>{{ user.registration_date.strftime('%Y-%m-%d %H:%M') if user.registration_date else 'N/A' }}</td>
-                <td>{{ user.last_login.strftime('%Y-%m-%d %H:%M') if user.last_login else 'N/A' }}</td>
+                <td>{{ item.user.registration_date.strftime('%Y-%m-%d %H:%M') if item.user.registration_date else 'N/A' }}</td> {# item.user.registration_date に変更 #}
+                <td>{{ item.user.last_login.strftime('%Y-%m-%d %H:%M') if item.user.last_login else 'N/A' }}</td>             {# item.user.last_login に変更 #}
                 <td>
                     <div class="btn-group" role="group">
-                        <a href="{{ url_for('blog_admin_bp.edit_user', user_id=user.id) }}" class="btn btn-sm btn-info">編集</a>
-                        <a href="{{ url_for('blog_admin_bp.change_user_role', user_id=user.id) }}" class="btn btn-sm btn-secondary">ロール変更</a> {# ロール変更機能も想定 #}
-                        <form action="{{ url_for('blog_admin_bp.delete_user', user_id=user.id) }}" method="POST" class="d-inline" onsubmit="return confirm('本当にこのユーザーを削除しますか？');">
+                        <a href="{{ url_for('blog_admin_bp.edit_user', user_id=item.user.id) }}" class="btn btn-sm btn-info">編集（ロール変更も含む）</a> {# user_id=item.user.id に変更 #}
+                        <form action="{{ url_for('blog_admin_bp.delete_user', user_id=item.user.id) }}" method="POST" class="d-inline" onsubmit="return confirm('本当にこのユーザーを削除しますか？');"> {# user_id=item.user.id に変更 #}
                             <button type="submit" class="btn btn-sm btn-danger">削除</button>
                         </form>
                     </div>

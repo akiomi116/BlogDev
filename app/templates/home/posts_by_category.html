@@ -9,25 +9,33 @@
         <span class="badge bg-primary ms-2">{{ posts|length }}件</span>
     </h1>
 
+    {# カテゴリの説明があれば表示 #}
+    {% if category.description %}
+        <p class="lead">{{ category.description }}</p>
+    {% endif %}
+
     {% if posts %}
         <div class="row">
             {% for post in posts %}
                 <div class="col-md-6 col-lg-4 mb-4">
                     <div class="card h-100 post-card">
-                        {# 画像表示の統一ロジック (ダッシュボードからコピーして調整) #}
+                        {# 画像表示の統一ロジック #}
                         {% if post.main_image_id and image_map.get(post.main_image_id) %}
+                            {# image_mapからImageオブジェクトを取得 #}
                             {% set main_image = image_map[post.main_image_id] %}
                             <img src="{{ main_image.thumbnail_url }}" 
                                 class="card-img-top" 
                                 alt="{{ main_image.alt_text or post.title }}"
                                 style="height: 150px; object-fit: cover;">
                         {% elif post.thumbnail_filename %}
+                            {# 旧来のthumbnail_filenameがある場合（互換性のため） #}
                             <img src="{{ url_for('static', filename='uploads/thumbnails/thumb_' + post.thumbnail_filename) }}" 
                                 class="card-img-top" 
                                 alt="{{ post.title }}"
                                 style="height: 150px; object-fit: cover;"
                                 onerror="this.src='{{ url_for('static', filename='images/default_thumbnail.png') }}';">
                         {% else %}
+                            {# 画像がない場合のプレースホルダー #}
                             <div class="card-img-top d-flex align-items-center justify-content-center" 
                                 style="height: 150px; background-color: #f8f9fa; border-bottom: 1px solid #dee2e6;">
                                 <i class="fas fa-image fa-2x text-muted"></i>
@@ -48,7 +56,7 @@
                                         <span class="badge bg-warning ms-1">下書き</span>
                                     {% endif %}
                                 </small>
-                                <a href="{{ url_for('posts.post_detail', post_id=post.id) }}" class="btn btn-primary btn-sm">
+                                <a href="{{ url_for('public_posts.show_post', slug=post.slug) }}" class="btn btn-primary btn-sm">
                                     記事を読む <i class="fas fa-arrow-right"></i>
                                 </a>
                             </div>
@@ -64,8 +72,9 @@
     {% endif %}
 
     <div class="text-center mt-4">
-        <a href="{{ url_for('home.dashboard') }}" class="btn btn-secondary">
-            <i class="fas fa-arrow-left"></i> ダッシュボードに戻る
+        {# このリンクはフロントエンドのユーザーが見るものなので、ダッシュボードに戻るよりも、全記事一覧やホームに戻るのが適切かもしれません #}
+        <a href="{{ url_for('home.index') }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> 全記事一覧に戻る
         </a>
     </div>
 </div>

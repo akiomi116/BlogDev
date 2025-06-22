@@ -1,5 +1,6 @@
 # F:\dev\BrogDev\app\models.py (修正版)
 
+import os
 import uuid
 from datetime import datetime
 from flask_login import UserMixin
@@ -126,6 +127,7 @@ class Tag(db.Model):
     id = db.Column(UUIDType(binary=False), primary_key=True, default=uuid.uuid4)
     name = db.Column(db.String(64), nullable=False)
     slug = db.Column(db.String(64), nullable=False)
+    description = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(pytz.utc), nullable=False)
     updated_at = db.Column(db.DateTime, default=lambda: datetime.now(pytz.utc), onupdate=lambda: datetime.now(pytz.utc), nullable=False)
 
@@ -138,9 +140,6 @@ class Tag(db.Model):
         return f'<Tag {self.name}>'
 
 class Image(db.Model):
-    """
-    ユーザーがアップロードした画像を表し、メイン画像または投稿内の埋め込み画像として使用できます。
-    """
     __tablename__ = 'image' 
     id = db.Column(UUIDType(binary=False), primary_key=True, default=uuid.uuid4) 
     original_filename = db.Column(db.String(255), nullable=False)
@@ -148,6 +147,9 @@ class Image(db.Model):
     thumbnail_filename = db.Column(db.String(255), nullable=True) 
     filepath = db.Column(db.String(500), nullable=False)
     thumbnail_filepath = db.Column(db.String(500), nullable=True)
+    
+    mimetype = db.Column(db.String(100), nullable=True)
+
     uploaded_at = db.Column(db.DateTime, default=lambda: datetime.now(pytz.utc))
     user_id = db.Column(UUIDType(binary=False), db.ForeignKey('user.id'), nullable=False) 
     is_main_image = db.Column(db.Boolean, default=False) 
@@ -158,26 +160,28 @@ class Image(db.Model):
     uploader = relationship('User', back_populates='uploaded_images') 
     post = relationship('Post', back_populates='images', foreign_keys=[post_id]) 
 
+    main_image_for_post = relationship('Post', back_populates='main_image', uselist=False, foreign_keys='Post.main_image_id')
+
+
     @property
     def url(self):
-        """画像の公開URLを生成します。"""
-        if current_app:
-            return url_for('static', filename=f'uploads/images/{self.unique_filename}')
-        return f'/static/uploads/images/{self.unique_filename}'
+        # インデントを揃える
+        if self.unique_filename:
+            return url_for('static', filename=os.path.join(current_app.config['UPLOAD_FOLDER_RELATIVE_PATH'], self.unique_filename).replace('\\', '/'))
+        # else に続くか、if ブロックと同じインデントレベルにする
+        return None # unique_filename がない場合はURLを返さない
 
 
     @property
     def thumbnail_url(self):
-        """サムネイルの公開URLを生成します。"""
+        # インデントを揃える
         if self.thumbnail_filename:
-            if current_app:
-                return url_for('static', filename=f'uploads/thumbnails/{self.thumbnail_filename}')
-            return f'/static/uploads/thumbnails/{self.thumbnail_filename}'
-        return None 
+            return url_for('static', filename=os.path.join(current_app.config['THUMBNAIL_FOLDER_RELATIVE_PATH'], self.thumbnail_filename).replace('\\', '/'))
+        # else に続くか、if ブロックと同じインデントレベルにする
+        return self.url if self.unique_filename else url_for('static', filename='images/default_thumbnail.png')
 
     def __repr__(self):
-        return f"<Image {self.unique_filename}>"
-
+        return f"<Image '{self.original_filename}' ({self.unique_filename})>"
 
 class Post(db.Model):
     """

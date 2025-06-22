@@ -18,7 +18,7 @@ public_posts_bp = Blueprint(
     template_folder=os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'templates', 'posts')
 )
 
-# --- 公開されている投稿一覧を表示するルート ---
+# --- 公開されている記事一覧を表示するルート ---
 @public_posts_bp.route('/') # /posts/ にアクセスした場合
 @public_posts_bp.route('/list') # /posts/list にアクセスした場合 (より明確なパス)
 def list_posts():
@@ -27,17 +27,17 @@ def list_posts():
     posts = Post.query.filter_by(is_published=True).order_by(Post.created_at.desc()).all()
     logger.debug("DEBUG: Public posts list accessed.")
     # render_templateのパスはBlueprintのtemplate_folderからの相対パスになります
-    return render_template('list_public.html', posts=posts, title="投稿一覧")
+    return render_template('list_public.html', posts=posts, title="記事一覧")
 
 
-# 例: カテゴリごとの投稿一覧を表示するルート (将来的に追加する場合)
+# 例: カテゴリごとの記事一覧を表示するルート (将来的に追加する場合)
 # @public_posts_bp.route('/category/<uuid:category_id>')
 # def posts_by_category(category_id):
 #     category = Category.query.get_or_404(category_id)
 #     posts = Post.query.filter_by(category_id=category_id, is_published=True).order_by(Post.created_at.desc()).all()
 #     return render_template('posts_by_category.html', category=category, posts=posts)
 
-# 例: タグごとの投稿一覧を表示するルート (将来的に追加する場合)
+# 例: タグごとの記事一覧を表示するルート (将来的に追加する場合)
 # @public_posts_bp.route('/tag/<uuid:tag_id>')
 # def posts_by_tag(tag_id):
 #     tag = Tag.query.get_or_404(tag_id)

@@ -1,11 +1,23 @@
 {# F:\dev\BrogDev\app\admin\templates\users\edit_user.html #}
 {% extends "base.html" %}
 
-{% block title %}ユーザー編集: {{ user.username }}{% endblock %}
+{% block title %}
+    {% if is_edit %} {# is_edit変数はroutes.pyから渡されます #}
+        ユーザー編集: {{ user.username }}
+    {% else %}
+        新規ユーザー追加
+    {% endif %}
+{% endblock %}
 
 {% block content %}
 <div class="container mt-4">
-    <h1 class="mb-4">ユーザー編集: {{ user.username }}</h1>
+    <h1 class="mb-4">
+    {% if is_edit %}
+        ユーザー編集: {{ user.username }}
+    {% else %}
+        新規ユーザー追加
+    {% endif %}
+    </h1>
     <hr>
     <form method="POST">
         {{ form.csrf_token }}
