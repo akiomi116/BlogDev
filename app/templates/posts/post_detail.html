@@ -59,6 +59,44 @@
             <div class="mt-5 text-center">
                 <a href="{{ url_for('home.index') }}" class="btn btn-secondary"><i class="fas fa-arrow-left me-2"></i>ホームに戻る</a>
             </div>
+
+            <div class="mt-5">
+                <h4>コメント</h4>
+                {% for comment in post.comments %}
+                    <div class="border rounded p-3 mb-3">
+                        <div class="d-flex justify-content-between">
+                            <strong>{{ comment.author_name }}</strong>
+                            <span class="text-muted small">{{ comment.created_at.strftime('%Y年%m月%d日 %H:%M') }}</span>
+                        </div>
+                        <div class="mt-2">
+                            {{ comment.content | safe }}
+                        </div>
+                    </div>
+                {% else %}
+                    <div class="text-center text-muted py-3">
+                        まだコメントはありません。
+                    </div>
+                {% endfor %}
+
+                <form method="POST" action="">
+                    {{ comment_form.csrf_token }}
+                    <div class="mb-3">
+                        {{ comment_form.author_name.label(class="form-label") }}
+                        {{ comment_form.author_name(class="form-control") }}
+                        {% for error in comment_form.author_name.errors %}
+                            <div class="text-danger">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+                    <div class="mb-3">
+                        {{ comment_form.body.label(class="form-label") }}
+                        {{ comment_form.body(class="form-control") }}
+                        {% for error in comment_form.body.errors %}
+                            <div class="text-danger">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+                    {{ comment_form.submit(class="btn btn-primary") }}
+                </form>
+            </div>
         </div>
     </div>
 </div>

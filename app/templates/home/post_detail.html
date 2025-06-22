@@ -67,7 +67,6 @@
                         <h5 class="mt-4">コメントを残す</h5>
                         <form method="POST" action="{{ url_for('home.post_detail', post_id=post.id) }}">
                             {{ comment_form.csrf_token }} {# CSRFトークンを追加 #}
-                            {# author_name フィールドはログインユーザーのみに制限するため削除済み #}
                             <div class="mb-3">
                                 {{ comment_form.body.label(class="form-label") }}
                                 {{ comment_form.body(class="form-control", rows="4") }}

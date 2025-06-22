@@ -151,8 +151,7 @@ class TagForm(FlaskForm):
 
 class CommentForm(FlaskForm):
     """コメントフォーム"""
-    author_name = StringField('名前', validators=[DataRequired(), Length(max=100)])
-    author_email = EmailField('メールアドレス', validators=[Optional(), Email(), Length(max=255)])
+    author_name = StringField('名前', validators=[DataRequired()])
     body = TextAreaField('コメント', validators=[DataRequired()])
     submit = SubmitField('コメントを送信')
 

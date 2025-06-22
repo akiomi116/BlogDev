@@ -244,6 +244,7 @@ class Comment(db.Model):
 
     user_id = db.Column(UUIDType(binary=False), db.ForeignKey('user.id'), nullable=False) 
     post_id = db.Column(UUIDType(binary=False), db.ForeignKey('post.id'), nullable=False) 
+    author_name = db.Column(db.String(64), nullable=False)  # ←この行を追加
 
     # ★★★ 修正点 3 ★★★
     # 競合していた 'user' relationship を削除し、'comment_author' と 'post' に

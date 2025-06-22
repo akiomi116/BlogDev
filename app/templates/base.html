@@ -165,11 +165,12 @@
                 </div>
             {% endif %}
         {% endwith %}
-        {% block content %}{% endblock %}
     </main>
+    {% block content %}{% endblock %}
+    <div class="text-muted small">テンプレート: {{ self.name }}</div>
 
     {# フッター #}
-    <footer class="bg-light py-3 mt-auto">
+    <footer class="mt-5">
         <div class="container text-center">
             <p class="mb-0">&copy; {{ current_year }} Akiomi's Blog. All rights reserved.</p>
         </div>

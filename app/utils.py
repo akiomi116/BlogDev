@@ -24,14 +24,14 @@ def create_thumbnail(original_filepath):
     指定された画像ファイルからサムネイルを生成し、サムネイルのファイル名を返します。
     失敗した場合は None を返します。
     """
-    current_app.logger.debug(f"DEBUG(utils): create_thumbnail called for original_filepath: {original_filepath}")
+    #current_app.logger.debug(f"DEBUG(utils): create_thumbnail called for original_filepath: {original_filepath}")
 
     thumbnail_dir = current_app.config['THUMBNAIL_FOLDER']
-    current_app.logger.debug(f"DEBUG(utils): Thumbnail storage directory: {thumbnail_dir}")
+    #current_app.logger.debug(f"DEBUG(utils): Thumbnail storage directory: {thumbnail_dir}")
 
     if not os.path.exists(thumbnail_dir):
         os.makedirs(thumbnail_dir)
-        current_app.logger.debug(f"DEBUG(utils): Thumbnail directory created: {thumbnail_dir}")
+        #current_app.logger.debug(f"DEBUG(utils): Thumbnail directory created: {thumbnail_dir}")
     else:
         current_app.logger.debug(f"DEBUG(utils): Thumbnail directory ensured: {thumbnail_dir}")
 
@@ -46,7 +46,7 @@ def create_thumbnail(original_filepath):
         thumb_filename = f"thumb_{uuid_part}.png" # サムネイルは常にPNGとして保存
         
         full_thumbnail_path = os.path.join(thumbnail_dir, thumb_filename)
-        current_app.logger.debug(f"DEBUG(utils): Full thumbnail path: {full_thumbnail_path}")
+        #current_app.logger.debug(f"DEBUG(utils): Full thumbnail path: {full_thumbnail_path}")
 
         img.thumbnail(THUMBNAIL_SIZE, PILImage.Resampling.LANCZOS)
         
@@ -54,7 +54,7 @@ def create_thumbnail(original_filepath):
             img = img.convert('RGB') # RGBAモードの画像をPNGで保存する際に変換は不要ですが、念のためRGBに変換
 
         img.save(full_thumbnail_path, format='PNG')
-        current_app.logger.debug(f"DEBUG(utils): Thumbnail saved successfully to: {full_thumbnail_path}")
+        #current_app.logger.debug(f"DEBUG(utils): Thumbnail saved successfully to: {full_thumbnail_path}")
 
         return thumb_filename
 

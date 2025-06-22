@@ -36,17 +36,17 @@ def create_app(config_class=config.Config):
     os.makedirs(app.config['UPLOAD_THUMBNAILS_DIR'], exist_ok=True)
 
     # デバッグ情報のロギング (app.logger を使用して、ファイルやコンソールに出力されるようにする)
-    app.logger.info(f"DEBUG: Flask app root path: {app.root_path}")
-    app.logger.info(f"DEBUG: Flask app static folder: {app.static_folder}")
-    app.logger.info(f"DEBUG: Flask app static URL path: {app.static_url_path}") # static_url_path は自動で /static になるので直接参照
-    app.logger.info(f"DEBUG: Flask app template folder: {app.template_folder}")
-    app.logger.info(f"DEBUG: Flask app instance path: {app.instance_path}")
-    app.logger.debug(f"DEBUG: SQLALCHEMY_DATABASE_URI: {app.config.get('SQLALCHEMY_DATABASE_URI')}")
-    app.logger.debug(f"DEBUG: UPLOAD_FOLDER (Absolute): {app.config.get('UPLOAD_FOLDER')}")
-    app.logger.debug(f"DEBUG: UPLOAD_IMAGES_DIR (Absolute): {app.config.get('UPLOAD_IMAGES_DIR')}")
-    app.logger.debug(f"DEBUG: UPLOAD_THUMBNAILS_DIR (Absolute): {app.config.get('UPLOAD_THUMBNAILS_DIR')}")
-    app.logger.debug(f"DEBUG: UPLOAD_FOLDER_RELATIVE_PATH (Relative from static): {app.config.get('UPLOAD_FOLDER_RELATIVE_PATH')}")
-    app.logger.debug(f"DEBUG: THUMBNAIL_FOLDER_RELATIVE_PATH (Relative from static): {app.config.get('THUMBNAIL_FOLDER_RELATIVE_PATH')}")
+    #app.logger.info(f"DEBUG: Flask app root path: {app.root_path}")
+    #app.logger.info(f"DEBUG: Flask app static folder: {app.static_folder}")
+    #app.logger.info(f"DEBUG: Flask app static URL path: {app.static_url_path}") # static_url_path は自動で /static になるので直接参照
+    #app.logger.info(f"DEBUG: Flask app template folder: {app.template_folder}")
+    #app.logger.info(f"DEBUG: Flask app instance path: {app.instance_path}")
+    #app.logger.debug(f"DEBUG: SQLALCHEMY_DATABASE_URI: {app.config.get('SQLALCHEMY_DATABASE_URI')}")
+    #app.logger.debug(f"DEBUG: UPLOAD_FOLDER (Absolute): {app.config.get('UPLOAD_FOLDER')}")
+    #app.logger.debug(f"DEBUG: UPLOAD_IMAGES_DIR (Absolute): {app.config.get('UPLOAD_IMAGES_DIR')}")
+    #app.logger.debug(f"DEBUG: UPLOAD_THUMBNAILS_DIR (Absolute): {app.config.get('UPLOAD_THUMBNAILS_DIR')}")
+    #app.logger.debug(f"DEBUG: UPLOAD_FOLDER_RELATIVE_PATH (Relative from static): {app.config.get('UPLOAD_FOLDER_RELATIVE_PATH')}")
+    #app.logger.debug(f"DEBUG: THUMBNAIL_FOLDER_RELATIVE_PATH (Relative from static): {app.config.get('THUMBNAIL_FOLDER_RELATIVE_PATH')}")
 
 
     # 拡張機能の初期化
@@ -142,13 +142,13 @@ def create_app(config_class=config.Config):
     app.cli.add_command(cli.init) 
 
     # URLマップのデバッグ出力 (アプリケーションコンテキスト内で実行されるようにする)
-    with app.app_context():
-        print("\n--- Flask URL Map ---")
-        for rule in app.url_map.iter_rules():
-            print(f"Endpoint: {rule.endpoint}, Methods: {rule.methods}, Rule: {rule.rule}")
-        print("---------------------\n")
-    
-        # データベーステーブルの作成 (開発時に便利ですが、本番環境では migrate コマンドを使用すべきです)
-        db.create_all() 
+    #with app.app_context():
+    #    print("\n--- Flask URL Map ---")
+    #    for rule in app.url_map.iter_rules():
+    #        print(f"Endpoint: {rule.endpoint}, Methods: {rule.methods}, Rule: {rule.rule}")
+    #    print("---------------------\n")
+    #
+    #    # データベーステーブルの作成 (開発時に便利ですが、本番環境では migrate コマンドを使用すべきです)
+    #   db.create_all() 
 
     return app

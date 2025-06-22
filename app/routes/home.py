@@ -18,7 +18,7 @@ home_bp = Blueprint('home', __name__)
 @home_bp.route('/')
 @home_bp.route('/index')
 def index():
-    logger.debug("DEBUG(home): index route accessed.")
+    #logger.debug("DEBUG(home): index route accessed.")
     page = request.args.get('page', 1, type=int)
     posts_pagination = Post.query.filter_by(is_published=True).order_by(Post.created_at.desc()).paginate(
         page=page, per_page=current_app.config.get('POSTS_PER_PAGE', 10), error_out=False
@@ -44,7 +44,7 @@ def index():
 # 投稿詳細ページ
 @home_bp.route('/post/<uuid:post_id>', methods=['GET', 'POST'])
 def post_detail(post_id):
-    logger.debug(f"DEBUG(home): Accessed post detail for post_id: {post_id}")
+    #logger.debug(f"DEBUG(home): Accessed post detail for post_id: {post_id}")
     post = db.session.get(Post, post_id)
     if post is None or not post.is_published: 
         current_app.logger.warning(f"Attempted to access non-existent or unpublished post with ID: {post_id}")
@@ -54,9 +54,9 @@ def post_detail(post_id):
     delete_form = DeleteForm() 
 
     if request.method == 'POST':
-        current_app.logger.debug(f"DEBUG: POST request received for post_id: {post_id}")
-        current_app.logger.debug(f"DEBUG: Form data: {request.form}")
-        current_app.logger.debug(f"DEBUG: current_user.is_authenticated: {current_user.is_authenticated}")
+        #current_app.logger.debug(f"DEBUG: POST request received for post_id: {post_id}")
+        #current_app.logger.debug(f"DEBUG: Form data: {request.form}")
+        #current_app.logger.debug(f"DEBUG: current_user.is_authenticated: {current_user.is_authenticated}")
 
         if not current_user.is_authenticated:
             flash('コメントを投稿するにはログインが必要です。', 'danger')
@@ -64,13 +64,14 @@ def post_detail(post_id):
             return redirect(url_for('auth.login', next=request.url))
 
         if comment_form.validate_on_submit():
-            current_app.logger.debug("DEBUG: Comment form validation successful.")
+            #current_app.logger.debug("DEBUG: Comment form validation successful.")
             try:
                 comment = Comment(
-                    body=comment_form.body.data,
-                    user_id=current_user.id, 
+                    body=comment_form.body.data,  # ←ここをbodyに
+                    author_name=comment_form.author_name.data,  # author_nameカラムがあれば
+                    user_id=current_user.id,
                     post_id=post.id,
-                    is_approved=False 
+                    is_approved=False
                 )
                 db.session.add(comment)
                 db.session.commit()
@@ -81,6 +82,15 @@ def post_detail(post_id):
                 db.session.rollback()
                 flash(f'コメントの投稿中にエラーが発生しました: {e}', 'danger')
                 current_app.logger.error(f"Error posting comment for post {post_id} by user {current_user.id}: {e}", exc_info=True)
+                # ここでreturnを追加
+                return render_template(
+                    'home/post_detail.html',
+                    post=post,
+                    comments=comments,
+                    comment_form=comment_form,
+                    delete_form=delete_form,
+                    current_year=current_year
+                )
         else:
             current_app.logger.warning(f"WARNING: Comment form validation failed. Errors: {comment_form.errors}")
             for field, errors in comment_form.errors.items():

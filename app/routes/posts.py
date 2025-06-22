@@ -25,7 +25,7 @@ def list_posts():
     """公開されている投稿の一覧を表示します。"""
     # is_published=True で公開済みの投稿のみを取得
     posts = Post.query.filter_by(is_published=True).order_by(Post.created_at.desc()).all()
-    logger.debug("DEBUG: Public posts list accessed.")
+    #logger.debug("DEBUG: Public posts list accessed.")
     # render_templateのパスはBlueprintのtemplate_folderからの相対パスになります
     return render_template('list_public.html', posts=posts, title="記事一覧")
 
