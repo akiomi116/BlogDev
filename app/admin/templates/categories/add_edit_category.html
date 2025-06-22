@@ -42,5 +42,19 @@
         </tbody>
     </table>
 
+    <div class="mt-4">
+        <h2>カテゴリの編集</h2>
+        <form action="{% if category %}{{ url_for('blog_admin_bp.update_category', category_id=category.id) }}{% else %}{{ url_for('blog_admin_bp.add_category') }}{% endif %}" method="POST">
+            {{ form.hidden_tag() }}
+            <div class="mb-3">
+                {{ form.name.label(class="form-label") }}
+                {{ form.name(class="form-control") }}
+            </div>
+            <button type="submit" class="btn btn-success">
+                <i class="fas fa-save me-2"></i> 保存
+            </button>
+        </form>
+    </div>
+
 </div>
 {% endblock %}

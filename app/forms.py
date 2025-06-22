@@ -96,13 +96,9 @@ class PostForm(FlaskForm):
     )
 
     # カテゴリ選択フィールド
-    category = QuerySelectField(
+    category = SelectField(
         'カテゴリ',
-        query_factory=lambda: Category.query.order_by(Category.name).all(),
-        get_pk=lambda a: a.id,
-        get_label=lambda a: a.name,
-        allow_blank=True,
-        blank_text='--- 未分類 ---',
+        coerce=str,  # UUIDならstr、intならint
         validators=[Optional()]
     )
     
@@ -138,7 +134,8 @@ class BulkImageUploadForm(FlaskForm):
 
 class CategoryForm(FlaskForm):
     """カテゴリ作成・編集フォーム"""
-    name = StringField('カテゴリ名', validators=[DataRequired(), Length(min=1, max=100)])
+    name = StringField('カテゴリ名', validators=[DataRequired()])
+    description = TextAreaField('説明', validators=[Optional()])
     submit = SubmitField('保存')
 
     def validate_name(self, name):

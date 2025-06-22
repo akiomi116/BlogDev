@@ -226,7 +226,7 @@ def register():
     return render_template('register.html')
 
 
-# 投稿一覧　ダッシュボード（認証後のページ）
+# 記事一覧　ダッシュボード（認証後のページ）
 @app.route('/dashboard')
 @login_required
 def dashboard():

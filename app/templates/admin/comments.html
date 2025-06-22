@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block title %}コメント管理{% endblock %}
+
+{% block content %}
+<h1>コメント管理</h1>
+<table class="table table-striped">
+    <thead>
+        <tr>
+            <th>ID</th>
+            <th>投稿タイトル</th>
+            <th>ユーザー</th>
+            <th>内容</th>
+            <th>作成日</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for comment in comments %}
+        <tr>
+            <td>{{ comment.id }}</td>
+            <td>{{ comment.post.title if comment.post else '' }}</td>
+            <td>{{ comment.author.username if comment.author else '' }}</td>
+            <td>{{ comment.body }}</td>
+            <td>{{ comment.created_at.strftime('%Y-%m-%d %H:%M') if comment.created_at else '' }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

@@ -266,7 +266,7 @@ if __name__ == '__main__':
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <h1>投稿一覧</h1>
+    <h1>記事一覧</h1>
     <a href="{{ url_for('create_post') }}" class="btn btn-success">新規投稿</a>
 </div>
 

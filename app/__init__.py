@@ -114,7 +114,8 @@ def create_app(config_class=config.Config):
     app.register_blueprint(home_bp)
     app.register_blueprint(auth_bp, url_prefix='/auth') 
     app.register_blueprint(public_posts_bp) 
-    app.register_blueprint(blog_admin_bp, url_prefix='/admin') 
+    app.register_blueprint(blog_admin_bp, url_prefix='/admin')
+    
 
     # 静的ファイル配信のためのカスタムエンドポイント (uploadsフォルダ用)
     @app.route('/uploads/images/<path:filename>')

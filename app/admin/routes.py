@@ -3,6 +3,7 @@
 import os
 import uuid
 import pytz 
+import re
 from datetime import datetime
 from werkzeug.utils import secure_filename
 from PIL import Image as PilImage 
@@ -18,8 +19,16 @@ from flask_wtf.file import FileAllowed
 
 from app.decorators import roles_required
 
-# ブループリントの定義
-bp = Blueprint('blog_admin_bp', __name__, template_folder='templates')
+from . import bp
+
+import re
+
+def slugify(text):
+    text = text.lower()
+    text = re.sub(r'[^\w\s-]', '', text)
+    text = re.sub(r'[\s_-]+', '-', text)
+    text = re.sub(r'^-+|-+$', '', text)
+    return text
 
 # --- 管理ダッシュボードのルート ---
 @bp.route('/')
@@ -69,7 +78,7 @@ def list_posts():
 def new_post():
     form = PostForm()
 
-    form.category.choices = [(c.id, c.name) for c in Category.query.order_by(Category.name).all()]
+    form.category.choices = [(str(c.id), c.name) for c in Category.query.all()]
     form.tags.choices = [(t.id, t.name) for t in Tag.query.order_by(Tag.name).all()]
     
     if form.validate_on_submit():
@@ -129,12 +138,15 @@ def new_post():
                 return render_template('posts/edit_post.html', form=form, title='新規投稿', is_edit=False)
 
         elif selected_main_image_id:
-            if isinstance(selected_main_image_id, uuid.UUID):
-                image_id_to_fetch = selected_main_image_id 
+            # Imageオブジェクトが来た場合はidを取り出す
+            if hasattr(selected_main_image_id, "id"):
+                image_id_to_fetch = selected_main_image_id.id
+            elif isinstance(selected_main_image_id, uuid.UUID):
+                image_id_to_fetch = selected_main_image_id
             else:
                 try:
-                    image_id_to_fetch = str(selected_main_image_id) 
-                except ValueError: 
+                    image_id_to_fetch = str(selected_main_image_id)
+                except ValueError:
                     current_app.logger.error(f"不正なUUID文字列が selected_main_image_id に渡されました: {selected_main_image_id}")
                     flash('選択されたメイン画像の形式が不正です。', 'warning')
                     return render_template('posts/edit_post.html', form=form, title='新規投稿', is_edit=False)
@@ -167,7 +179,9 @@ def new_post():
 
         selected_tags = []
         if form.tags.data:
-            selected_tags = Tag.query.filter(Tag.id.in_(form.tags.data)).all()
+            # Tagオブジェクトのリストからidリストに変換
+            tag_ids = [tag.id for tag in form.tags.data]
+            selected_tags = Tag.query.filter(Tag.id.in_(tag_ids)).all()
         new_post.tags = selected_tags
 
         selected_additional_images = []
@@ -211,7 +225,7 @@ def edit_post(post_id):
 
     form = PostForm(obj=post) 
 
-    form.category.choices = [(c.id, c.name) for c in Category.query.order_by(Category.name).all()]
+    form.category.choices = [(str(c.id), c.name) for c in Category.query.all()]
     form.tags.choices = [(t.id, t.name) for t in Tag.query.order_by(Tag.name).all()]
 
     if request.method == 'GET':
@@ -228,13 +242,17 @@ def edit_post(post_id):
         post.updated_at = datetime.now(pytz.utc)
 
         if form.category.data:
-            post.category = db.session.get(Category, form.category.data)
+            # カテゴリIDからCategoryオブジェクトを取得
+            category_obj = db.session.get(Category, form.category.data)
+            post.category = category_obj
         else:
             post.category = None
 
         selected_tags = []
         if form.tags.data:
-            selected_tags = Tag.query.filter(Tag.id.in_(form.tags.data)).all()
+            # Tagオブジェクトのリストからidリストに変換
+            tag_ids = [tag.id for tag in form.tags.data]
+            selected_tags = Tag.query.filter(Tag.id.in_(tag_ids)).all()
         post.tags = selected_tags
 
         main_image_file = form.main_image_file.data
@@ -282,15 +300,18 @@ def edit_post(post_id):
                 post.main_image = new_main_image_obj 
 
         elif selected_main_image_id:
-            if isinstance(selected_main_image_id, uuid.UUID): 
-                 image_id_to_fetch = selected_main_image_id
-            else: 
-                 try:
-                     image_id_to_fetch = str(selected_main_image_id) 
-                 except ValueError:
-                     current_app.logger.error(f"不正なUUID文字列が selected_main_image_id に渡されました: {selected_main_image_id}")
-                     flash('選択されたメイン画像の形式が不正です。', 'warning')
-                     return render_template('posts/edit_post.html', form=form, post=post, title='投稿編集', is_edit=True)
+            # Imageオブジェクトが来た場合はidを取り出す
+            if hasattr(selected_main_image_id, "id"):
+                image_id_to_fetch = selected_main_image_id.id
+            elif isinstance(selected_main_image_id, uuid.UUID):
+                image_id_to_fetch = selected_main_image_id
+            else:
+                try:
+                    image_id_to_fetch = str(selected_main_image_id)
+                except ValueError:
+                    current_app.logger.error(f"不正なUUID文字列が selected_main_image_id に渡されました: {selected_main_image_id}")
+                    flash('選択されたメイン画像の形式が不正です。', 'warning')
+                    return render_template('posts/edit_post.html', form=form, post=post, title='投稿編集', is_edit=True)
 
             new_main_image_obj = db.session.get(Image, image_id_to_fetch)
             
@@ -373,12 +394,19 @@ def add_category():
     from app.forms import CategoryForm 
     form = CategoryForm()
     if form.validate_on_submit():
-        new_category = Category(name=form.name.data)
+        slug = slugify(form.name.data)
+        new_category = Category(
+            name=form.name.data,
+            slug=slug,
+            description=form.description.data,
+            user_id=current_user.id  # ここを追加
+        )
         db.session.add(new_category)
         db.session.commit()
         flash('新しいカテゴリが追加されました。', 'success')
         return redirect(url_for('blog_admin_bp.list_categories'))
-    return render_template('categories/add_category.html', form=form, title='カテゴリ追加')
+
+    return render_template('categories/add_edit_category.html', form=form, title='カテゴリ追加')
 
 @bp.route('/categories/edit/<uuid:category_id>', methods=['GET', 'POST'])
 @login_required
@@ -396,7 +424,7 @@ def edit_category(category_id):
         db.session.commit()
         flash('カテゴリ名が更新されました。', 'success')
         return redirect(url_for('blog_admin_bp.list_categories'))
-    return render_template('categories/edit_category.html', form=form, category=category, title='カテゴリ編集')
+    return render_template('categories/add_edit_category.html', form=form, category=category, title='カテゴリ編集')
 
 @bp.route('/categories/delete/<uuid:category_id>', methods=['POST'])
 @login_required
@@ -469,7 +497,7 @@ def delete_tag(tag_id):
     if not tag_to_delete:
         flash('タグが見つかりません。', 'danger')
         return redirect(url_for('blog_admin_bp.list_tags'))
-    
+
     if tag_to_delete.posts.count() > 0:
         flash('このタグには関連する投稿があります。先に投稿からタグを解除してください。', 'warning')
         return redirect(url_for('blog_admin_bp.list_tags'))
@@ -667,7 +695,7 @@ def delete_image(image_id):
         flash('この画像を削除する権限がありません。', 'danger')
         return redirect(url_for('blog_admin_bp.list_images'))
 
-    if image_to_delete.main_image_for_post.first(): 
+    if image_to_delete.main_image_for_post:
         flash('この画像は投稿のメイン画像として使用されています。先に投稿から画像を解除してください。', 'warning')
         return redirect(url_for('blog_admin_bp.list_images'))
 
@@ -778,3 +806,34 @@ def delete_user(user_id):
         current_app.logger.error(f"ユーザーの削除中にエラーが発生しました: {e}", exc_info=True) # 追加: エラーログ出力
     
     return redirect(url_for('blog_admin_bp.list_users'))
+
+@bp.route('/comments')
+@login_required
+@roles_required(['admin', 'editor', 'poster'])
+def list_comments():
+    # コメント一覧を取得してテンプレートに渡す
+    comments = Comment.query.all()
+    return render_template('admin/comments.html', comments=comments)
+
+@bp.route('/roles')
+@login_required
+@roles_required(['admin'])
+def manage_roles():
+    # ロール一覧を取得してテンプレートに渡す
+    roles = Role.query.all()
+    return render_template('admin/roles.html', roles=roles)
+
+@bp.route('/posts/toggle_publish/<uuid:post_id>', methods=['POST'])
+@login_required
+@roles_required(['admin', 'editor', 'poster'])
+def toggle_publish(post_id):
+    post = db.session.get(Post, post_id)
+    if not post:
+        flash('投稿が見つかりません。', 'danger')
+        return redirect(url_for('blog_admin_bp.list_posts'))
+    post.is_published = not post.is_published
+    db.session.commit()
+    flash('公開状態を切り替えました。', 'success')
+    return redirect(url_for('blog_admin_bp.list_posts'))
+
+

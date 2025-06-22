@@ -96,7 +96,8 @@
                             {# カテゴリ管理のリンクを修正 #}
                             <li><a class="dropdown-item" href="{{ url_for('blog_admin_bp.list_categories') }}"><i class="fas fa-sitemap me-2"></i> カテゴリ管理</a></li>
                             <li><a class="dropdown-item" href="{{ url_for('blog_admin_bp.list_tags') }}"><i class="fas fa-tags me-2"></i> タグ管理</a></li>
-                            <li><a class="dropdown-item" href="{{ url_for('blog_admin_bp.list_comments') }}"><i class="fas fa-comments me-2"></i> コメント管理</a></li>
+                            {# コメント管理のリンクを削除 #}
+                            {# <li><a class="dropdown-item" href="{{ url_for('blog_admin_bp.list_comments') }}"><i class="fas fa-comments me-2"></i> コメント管理</a></li> #}
                             {# 画像管理のリンクを修正 #}
                             <li><a class="dropdown-item" href="{{ url_for('blog_admin_bp.list_images') }}"><i class="fas fa-image me-2"></i> 画像管理</a></li>
                             {# 新たに追加されたユーザー管理とロール管理へのリンク #}

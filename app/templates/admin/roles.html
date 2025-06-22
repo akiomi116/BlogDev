@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+
+{% block title %}ロール管理{% endblock %}
+
+{% block content %}
+<h1>ロール管理</h1>
+<table class="table table-striped">
+    <thead>
+        <tr>
+            <th>ID</th>
+            <th>ロール名</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for role in roles %}
+        <tr>
+            <td>{{ role.id }}</td>
+            <td>{{ role.name }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}
