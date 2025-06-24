@@ -165,8 +165,8 @@
                 </div>
             {% endif %}
         {% endwith %}
+        {% block content %}{% endblock %}
     </main>
-    {% block content %}{% endblock %}
     <div class="text-muted small">テンプレート: {{ self.name }}</div>
 
     {# フッター #}
