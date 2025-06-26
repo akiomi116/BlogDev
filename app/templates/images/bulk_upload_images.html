@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>一括画像アップロード</h1>
+<form method="post" enctype="multipart/form-data">
+    {{ form.hidden_tag() }}
+    {{ form.images.label }} <br>
+    {{ form.images(class="form-control", multiple=True) }}<br>
+    {{ form.submit() }}
+</form>
+{% endblock %}

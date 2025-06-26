@@ -16,17 +16,6 @@ F:.
 Да  test_path.py
 Да  update_image_paths.py
 Да  
-ДеДЯ.pytest_cache
-Да  Да  .gitignore
-Да  Да  CACHEDIR.TAG
-Да  Да  README.md
-Да  Да  
-Да  ДдДЯv
-Да      ДдДЯcache
-Да              lastfailed
-Да              nodeids
-Да              stepwise
-Да              
 ДеДЯapp
 Да  Да  .gitignore
 Да  Да  cli.py
@@ -109,15 +98,19 @@ F:.
 Да  Да  Да  _messages.html
 Да  Да  Да  
 Да  Да  ДеДЯadmin
+Да  Да  Да      comments.html
 Да  Да  Да      index.html
 Да  Да  Да      manage_images.html
+Да  Да  Да      roles.html
 Да  Да  Да      upload_images.html
 Да  Да  Да      
 Да  Да  ДеДЯauth
 Да  Да  Да      login.html
+Да  Да  Да      profile.html
 Да  Да  Да      register.html
 Да  Да  Да      
 Да  Да  ДеДЯcategories
+Да  Да  Да      add_edit_category.html
 Да  Да  Да      edit_category.html
 Да  Да  Да      list_categories.html
 Да  Да  Да      new_category.html
@@ -133,6 +126,10 @@ F:.
 Да  Да  Да      posts_by_category.html
 Да  Да  Да      posts_by_tag.html
 Да  Да  Да      post_detail.html
+Да  Да  Да      
+Да  Да  ДеДЯimages
+Да  Да  Да      bulk_upload_images.html
+Да  Да  Да      upload_image.html
 Да  Да  Да      
 Да  Да  ДеДЯmacros
 Да  Да  Да      image_display.html
@@ -2014,6 +2011,27 @@ F:.
 Да  Да      Да      top_level.txt
 Да  Да      Да      WHEEL
 Да  Да      Да      
+Да  Да      ДеДЯdotenv
+Да  Да      Да  Да  cli.py
+Да  Да      Да  Да  ipython.py
+Да  Да      Да  Да  main.py
+Да  Да      Да  Да  parser.py
+Да  Да      Да  Да  py.typed
+Да  Да      Да  Да  variables.py
+Да  Да      Да  Да  version.py
+Да  Да      Да  Да  __init__.py
+Да  Да      Да  Да  __main__.py
+Да  Да      Да  Да  
+Да  Да      Да  ДдДЯ__pycache__
+Да  Да      Да          cli.cpython-312.pyc
+Да  Да      Да          ipython.cpython-312.pyc
+Да  Да      Да          main.cpython-312.pyc
+Да  Да      Да          parser.cpython-312.pyc
+Да  Да      Да          variables.cpython-312.pyc
+Да  Да      Да          version.cpython-312.pyc
+Да  Да      Да          __init__.cpython-312.pyc
+Да  Да      Да          __main__.cpython-312.pyc
+Да  Да      Да          
 Да  Да      ДеДЯemail_validator
 Да  Да      Да  Да  deliverability.py
 Да  Да      Да  Да  exceptions_types.py
@@ -7484,6 +7502,18 @@ F:.
 Да  Да      Да      top_level.txt
 Да  Да      Да      WHEEL
 Да  Да      Да      
+Да  Да      ДеДЯpython_dotenv-1.1.1.dist-info
+Да  Да      Да  Да  entry_points.txt
+Да  Да      Да  Да  INSTALLER
+Да  Да      Да  Да  METADATA
+Да  Да      Да  Да  RECORD
+Да  Да      Да  Да  REQUESTED
+Да  Да      Да  Да  top_level.txt
+Да  Да      Да  Да  WHEEL
+Да  Да      Да  Да  
+Да  Да      Да  ДдДЯlicenses
+Да  Да      Да          LICENSE
+Да  Да      Да          
 Да  Да      ДеДЯpython_slugify-8.0.4.dist-info
 Да  Да      Да      entry_points.txt
 Да  Да      Да      INSTALLER
@@ -8165,6 +8195,15 @@ F:.
 Да  Да      Да      top_level.txt
 Да  Да      Да      WHEEL
 Да  Да      Да      zip-safe
+Да  Да      Да      
+Да  Да      ДеДЯPyYAML-6.0.2.dist-info
+Да  Да      Да      INSTALLER
+Да  Да      Да      LICENSE
+Да  Да      Да      METADATA
+Да  Да      Да      RECORD
+Да  Да      Да      REQUESTED
+Да  Да      Да      top_level.txt
+Да  Да      Да      WHEEL
 Да  Да      Да      
 Да  Да      ДеДЯqrcode
 Да  Да      Да  Да  base.py
@@ -9521,6 +9560,45 @@ F:.
 Да  Да      Да  ДдДЯlicenses
 Да  Да      Да          LICENSE.txt
 Да  Да      Да          
+Да  Да      ДеДЯyaml
+Да  Да      Да  Да  composer.py
+Да  Да      Да  Да  constructor.py
+Да  Да      Да  Да  cyaml.py
+Да  Да      Да  Да  dumper.py
+Да  Да      Да  Да  emitter.py
+Да  Да      Да  Да  error.py
+Да  Да      Да  Да  events.py
+Да  Да      Да  Да  loader.py
+Да  Да      Да  Да  nodes.py
+Да  Да      Да  Да  parser.py
+Да  Да      Да  Да  reader.py
+Да  Да      Да  Да  representer.py
+Да  Да      Да  Да  resolver.py
+Да  Да      Да  Да  scanner.py
+Да  Да      Да  Да  serializer.py
+Да  Да      Да  Да  tokens.py
+Да  Да      Да  Да  _yaml.cp312-win_amd64.pyd
+Да  Да      Да  Да  __init__.py
+Да  Да      Да  Да  
+Да  Да      Да  ДдДЯ__pycache__
+Да  Да      Да          composer.cpython-312.pyc
+Да  Да      Да          constructor.cpython-312.pyc
+Да  Да      Да          cyaml.cpython-312.pyc
+Да  Да      Да          dumper.cpython-312.pyc
+Да  Да      Да          emitter.cpython-312.pyc
+Да  Да      Да          error.cpython-312.pyc
+Да  Да      Да          events.cpython-312.pyc
+Да  Да      Да          loader.cpython-312.pyc
+Да  Да      Да          nodes.cpython-312.pyc
+Да  Да      Да          parser.cpython-312.pyc
+Да  Да      Да          reader.cpython-312.pyc
+Да  Да      Да          representer.cpython-312.pyc
+Да  Да      Да          resolver.cpython-312.pyc
+Да  Да      Да          scanner.cpython-312.pyc
+Да  Да      Да          serializer.cpython-312.pyc
+Да  Да      Да          tokens.cpython-312.pyc
+Да  Да      Да          __init__.cpython-312.pyc
+Да  Да      Да          
 Да  Да      ДеДЯ_pytest
 Да  Да      Да  Да  cacheprovider.py
 Да  Да      Да  Да  capture.py
@@ -9688,6 +9766,12 @@ F:.
 Да  Да      Да          _version.cpython-312.pyc
 Да  Да      Да          __init__.cpython-312.pyc
 Да  Да      Да          
+Да  Да      ДеДЯ_yaml
+Да  Да      Да  Да  __init__.py
+Да  Да      Да  Да  
+Да  Да      Да  ДдДЯ__pycache__
+Да  Да      Да          __init__.cpython-312.pyc
+Да  Да      Да          
 Да  Да      ДдДЯ__pycache__
 Да  Да              py.cpython-312.pyc
 Да  Да              typing_extensions.cpython-312.pyc
@@ -9698,6 +9782,7 @@ F:.
 Да          Activate.ps1
 Да          alembic.exe
 Да          deactivate.bat
+Да          dotenv.exe
 Да          email_validator.exe
 Да          flask.exe
 Да          mako-render.exe
@@ -9735,6 +9820,8 @@ F:.
 Да  Да  
 Да  ДеДЯversions
 Да  Да  Да  554730c19b9a_add_qr_model.py
+Да  Да  Да  559676102ce7_add_author_name_to_comment.py
+Да  Да  Да  639ebea44190_update_image_model_filename_and_urls.py
 Да  Да  Да  9bc43c7b1009_initial_migration_after_reset.py
 Да  Да  Да  c079d47a50c4_rename_comment_content_to_comment_body.py
 Да  Да  Да  c2267510372f_add_additional_images_relationship_to_.py
@@ -9742,6 +9829,8 @@ F:.
 Да  Да  Да  
 Да  Да  ДдДЯ__pycache__
 Да  Да          554730c19b9a_add_qr_model.cpython-312.pyc
+Да  Да          559676102ce7_add_author_name_to_comment.cpython-312.pyc
+Да  Да          639ebea44190_update_image_model_filename_and_urls.cpython-312.pyc
 Да  Да          9bc43c7b1009_initial_migration_after_reset.cpython-312.pyc
 Да  Да          c079d47a50c4_rename_comment_content_to_comment_body.cpython-312.pyc
 Да  Да          c2267510372f_add_additional_images_relationship_to_.cpython-312.pyc
@@ -9805,14 +9894,13 @@ F:.
 Да      Да      00628c97-ed8b-464b-b44a-584e6dacc68e.JPG
 Да      Да      0a143a1d-539e-4c7c-8950-5ef51033fb2b.JPG
 Да      Да      0eeedd0f-c047-4ef3-9968-868224133b0c.JPG
+Да      Да      102e1664-027e-4d80-9e42-a24b7f70de7d.JPG
 Да      Да      1f1b2183189c4f1d8161072244f7f3db.jpg
 Да      Да      226f458b-b085-44d5-aff1-bb5160a7a8b4.JPG
 Да      Да      22cdf8f6c6f64a28935005f732500228.jpg
 Да      Да      25980b5b-4a3f-4b23-981a-f29103342729.JPG
-Да      Да      2bb0bc78-fe30-473b-8cca-6e7a5ca66636.JPG
-Да      Да      2ea66466-bcb3-443a-8645-74b8ed2dec49.JPG
+Да      Да      2d31b128-8758-4091-ab9f-97df8d816925.JPG
 Да      Да      3a7e9d9a-fc24-45d4-94c8-da46ebd2b813.jpg
-Да      Да      3c0aeaf2-47cd-446c-987c-d9e5852a7e90.JPG
 Да      Да      41580fbf74444502a3c2a5e4b309c502.jpg
 Да      Да      4352047cc12f40e99fa9dee070e740bc.jpg
 Да      Да      457ce4bc-4ff0-4e53-b2b7-c936019b9bd6.JPG
@@ -9822,7 +9910,9 @@ F:.
 Да      Да      50b81105-8b36-4b6a-916b-83bee87f0b39.JPG
 Да      Да      55110841312e404b97a7a7592164a6f4.jpg
 Да      Да      5f0211d762ad44ed890c0bb5ab84ac7f.jpg
+Да      Да      67c219c0-0c7f-4966-915f-77dead35727f.JPG
 Да      Да      67fc4d16-bbaa-4f0b-a0bf-cfc6798d44e2.JPG
+Да      Да      68149cda-ef71-488a-96a5-8d773a5923b7.JPG
 Да      Да      6cc41c25-3c14-4710-99b3-59b84ae68355.JPG
 Да      Да      6e4c692879ca4c82b186329664cb9aa7.jpg
 Да      Да      72c41ceb960946cd96d6d6d32d6aa39e.jpg
@@ -9831,15 +9921,19 @@ F:.
 Да      Да      74f94c17cebb49bb867f25f72201c06b.jpg
 Да      Да      8289de91-1129-4c91-b76a-269ea42feb7f.JPG
 Да      Да      8761c043-06db-40d4-9723-315de0005339.JPG
+Да      Да      8f2827f0-0fa8-4efb-be0c-95bc693a2ea1.JPG
 Да      Да      947f7d6c574b4d39807c78e054c9052e.jpg
 Да      Да      9a3e2167-1476-4700-87f8-3088358ea4f2.JPG
 Да      Да      9bb75b781a114522ba5be27e2c38120c.jpg
 Да      Да      9bc7565b56bd400ebfd592f5db8c660d.jpg
 Да      Да      9c6ce715-5632-45dc-9a69-b00d524973cd.jpg
 Да      Да      9fb89b24303942998ba77510cdc9cddf.jpg
+Да      Да      a436aed9-b0e9-4b92-b368-d64f144579ff.JPG
 Да      Да      aa14994bee944d6197fd0ca8a26cb3d3.jpg
+Да      Да      b047f8a1-bbc4-43d5-9dc2-d3126c616f24.JPG
 Да      Да      b3463feac8484e03a9c410ecadd61a37.jpg
 Да      Да      b490b9db-80ce-4e03-8ecf-732640905af6.JPG
+Да      Да      b4a82309-8a0e-4d88-98a5-05351e706cf8.JPG
 Да      Да      b6ccba98d6b449b4ad259fbebcd31935.jpg
 Да      Да      b71326722f5f4b9384f822fc5a565027.jpg
 Да      Да      b7ebf950f60e4cf79bcad1badf4c0081.jpg
@@ -9866,9 +9960,7 @@ F:.
 Да              thumb_10ade52e4f2140f5844d603a2829155e.jpg
 Да              thumb_1234d0ad746442729a937382e731e286.jpg
 Да              thumb_2b956e55820e4558a69742b5205e5882.jpg
-Да              thumb_2bb0bc78-fe30-473b-8cca-6e7a5ca66636.JPG
-Да              thumb_2ea66466-bcb3-443a-8645-74b8ed2dec49.JPG
-Да              thumb_3c0aeaf2-47cd-446c-987c-d9e5852a7e90.JPG
+Да              thumb_2d31b128-8758-4091-ab9f-97df8d816925.JPG
 Да              thumb_4619a372ea904406a5c95df2d0cdc7cb.jpg
 Да              thumb_4c948fbaf2b74e558b8e701010849b9b.jpg
 Да              thumb_4f96becee26440549c8777abb8dbde54.jpg
@@ -9879,17 +9971,23 @@ F:.
 Да              thumb_59e93d2316f74ebbafff3eff0c1a72d1.jpg
 Да              thumb_618e1511e67a412b8cb786693db48d97.jpg
 Да              thumb_6337857f04814f7695ad4ec1ad79c146.jpg
+Да              thumb_67c219c0-0c7f-4966-915f-77dead35727f.JPG
 Да              thumb_67fc4d16-bbaa-4f0b-a0bf-cfc6798d44e2.JPG
+Да              thumb_68149cda-ef71-488a-96a5-8d773a5923b7.JPG
 Да              thumb_69707bbd636c4b6fb3c0f78d24af9666.jpg
 Да              thumb_6cc41c25-3c14-4710-99b3-59b84ae68355.png
 Да              thumb_7314b892-af1b-49f4-bc71-1962787d7a9c.png
 Да              thumb_8179ae5093b64894bfa6692cf521298e.jpg
 Да              thumb_81c468fe623f40b69fe79d7d3ada654f.jpg
 Да              thumb_8cd5a36e0a434f6990f4401843d9c551.jpg
+Да              thumb_8f2827f0-0fa8-4efb-be0c-95bc693a2ea1.JPG
 Да              thumb_9a3e2167-1476-4700-87f8-3088358ea4f2.png
+Да              thumb_a436aed9-b0e9-4b92-b368-d64f144579ff.JPG
 Да              thumb_aa66339f39d84531b2620829a2ed9b02.jpg
 Да              thumb_abcc37007984420db96f485c977426c3.jpg
+Да              thumb_b047f8a1-bbc4-43d5-9dc2-d3126c616f24.JPG
 Да              thumb_b490b9db-80ce-4e03-8ecf-732640905af6.JPG
+Да              thumb_b4a82309-8a0e-4d88-98a5-05351e706cf8.JPG
 Да              thumb_b6049cb1169d4202a37bcc5ccf58bd0f.jpg
 Да              thumb_b68aceaf12684ab29044afca3ab620b8.jpg
 Да              thumb_b9c62bb4f1e045ddb743217f64067cff.jpg

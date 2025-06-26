@@ -117,7 +117,7 @@ class PostForm(FlaskForm):
 
 class ImageUploadForm(FlaskForm):
     """単一画像アップロードフォーム（Alt Text付き）"""
-    image_file = FileField('画像ファイル', validators=[
+    image = FileField('画像ファイル', validators=[
         FileRequired('画像ファイルを選択してください。'),
         FileAllowed(['jpg', 'jpeg', 'png', 'gif', 'webp'], '画像ファイル (JPG, JPEG, PNG, GIF, WEBP) のみ許可されます')
     ])
@@ -126,7 +126,7 @@ class ImageUploadForm(FlaskForm):
 
 class BulkImageUploadForm(FlaskForm):
     """複数画像一括アップロードフォーム"""
-    image_files = FileField('画像ファイル (複数選択可)', validators=[
+    images = FileField('画像ファイル (複数選択可)', validators=[
         FileRequired('画像ファイルを選択してください。'),
         FileAllowed(['jpg', 'jpeg', 'png', 'gif', 'webp'], '画像ファイル (JPG, JPEG, PNG, GIF, WEBP) のみ許可されます')
     ])
