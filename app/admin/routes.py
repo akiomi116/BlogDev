@@ -469,7 +469,7 @@ def add_tag():
         db.session.commit()
         flash('新しいタグが追加されました。', 'success')
         return redirect(url_for('blog_admin_bp.list_tags'))
-    return render_template('tags/add_tag.html', form=form, title='タグ追加')
+    return render_template('tags/new_tag.html', form=form, title='タグ追加')
 
 @bp.route('/tags/edit/<uuid:tag_id>', methods=['GET', 'POST'])
 @login_required
@@ -603,7 +603,7 @@ def bulk_upload_images():
     if form.validate_on_submit():
         uploaded_count = 0
         failed_count = 0
-        for image_file in form.image_files.data:
+        for image_file in form.images.data:
             if image_file and allowed_file(image_file.filename):
                 original_filename = secure_filename(image_file.filename)
                 unique_filename = str(uuid.uuid4()) + os.path.splitext(original_filename)[1] # 拡張子を取得
@@ -728,6 +728,7 @@ def delete_image(image_id):
         current_app.logger.error(f"画像の削除中にエラーが発生しました (DBロールバック): {e}", exc_info=True)
 
     return redirect(url_for('blog_admin_bp.list_images'))
+
 # --- ユーザー管理 ---
 @bp.route('/users')
 @login_required
@@ -763,15 +764,15 @@ def edit_user(user_id):
         
         # ロールの更新
         selected_roles = []
-        if form.roles.data:
-            selected_roles = Role.query.filter(Role.id.in_(form.roles.data)).all()
+        if form.role.data:
+            selected_roles = Role.query.filter(Role.id.in_(form.role.data)).all()
         user.roles = selected_roles
 
         db.session.commit()
         flash('ユーザー情報が更新されました。', 'success')
         return redirect(url_for('blog_admin_bp.list_users'))
     elif request.method == 'GET':
-        form.roles.data = [role.id for role in user.roles]
+        form.role.data = user.role.id if user.role else None
 
     return render_template('users/edit_user.html', form=form, user=user, title='ユーザー編集')
 
@@ -835,5 +836,30 @@ def toggle_publish(post_id):
     db.session.commit()
     flash('公開状態を切り替えました。', 'success')
     return redirect(url_for('blog_admin_bp.list_posts'))
+
+# ユーザー追加ルート
+@bp.route('/users/add', methods=['GET', 'POST'])
+@login_required
+@roles_required(['admin'])  # 管理者のみがアクセス可能
+def add_user():
+    form = UserEditForm()
+    form.roles.choices = [(r.id, r.name) for r in Role.query.order_by(Role.name).all()]
+
+    if form.validate_on_submit():
+        user = User(
+            username=form.username.data,
+            email=form.email.data,
+            is_active=form.is_active.data
+        )
+        if form.password.data:
+            user.password_hash = generate_password_hash(form.password.data)
+        if form.role.data:
+            user.roles = Role.query.filter(Role.id.in_(form.role.data)).all()
+        db.session.add(user)
+        db.session.commit()
+        flash('ユーザーが追加されました。', 'success')
+        return redirect(url_for('blog_admin_bp.list_users'))
+
+    return render_template('users/edit_user.html', form=form, title='ユーザー追加')
 
 

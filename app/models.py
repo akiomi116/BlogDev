@@ -59,14 +59,10 @@ class User(UserMixin, db.Model):
     updated_at = db.Column(db.DateTime, default=lambda: datetime.now(pytz.utc), onupdate=lambda: datetime.now(pytz.utc), nullable=False)
 
     role = relationship('Role', backref=db.backref('users', lazy='dynamic'))
-
     posts = relationship('Post', back_populates='posted_by', lazy='dynamic', cascade='all, delete-orphan')
     categories = relationship('Category', backref='user', lazy='dynamic', cascade='all, delete-orphan')
     tags = relationship('Tag', backref='user', lazy='dynamic', cascade='all, delete-orphan')
     uploaded_images = relationship('Image', back_populates='uploader', lazy='dynamic', cascade='all, delete-orphan')
-    
-    # ★★★ 修正点 1 ★★★
-    # backref を back_populates に変更し、Comment.comment_author との双方向関係を明示
     comments = relationship('Comment', back_populates='comment_author', lazy='dynamic', cascade='all, delete-orphan')
 
     @property

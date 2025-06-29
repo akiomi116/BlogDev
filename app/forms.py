@@ -1,7 +1,7 @@
 # F:\dev\BrogDev\app\forms.py
 
 from flask_wtf import FlaskForm
-from flask_wtf.file import FileField, FileAllowed, FileRequired
+from flask_wtf.file import FileField, MultipleFileField, FileAllowed, FileRequired
 from wtforms import StringField, TextAreaField, BooleanField, SubmitField, PasswordField, EmailField, SelectField, SelectMultipleField
 from wtforms.validators import DataRequired, Length, Email, EqualTo, ValidationError, Optional
 
@@ -115,6 +115,11 @@ class PostForm(FlaskForm):
     is_published = BooleanField('公開する')
     submit = SubmitField('投稿を作成')
 
+    def validate(self, extra_validators=None):
+        rv = super().validate(extra_validators=extra_validators)
+        if not rv:
+            return False
+
 class ImageUploadForm(FlaskForm):
     """単一画像アップロードフォーム（Alt Text付き）"""
     image = FileField('画像ファイル', validators=[
@@ -126,7 +131,7 @@ class ImageUploadForm(FlaskForm):
 
 class BulkImageUploadForm(FlaskForm):
     """複数画像一括アップロードフォーム"""
-    images = FileField('画像ファイル (複数選択可)', validators=[
+    images = MultipleFileField('画像ファイル (複数選択可)', validators=[
         FileRequired('画像ファイルを選択してください。'),
         FileAllowed(['jpg', 'jpeg', 'png', 'gif', 'webp'], '画像ファイル (JPG, JPEG, PNG, GIF, WEBP) のみ許可されます')
     ])

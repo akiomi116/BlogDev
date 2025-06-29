@@ -35,19 +35,19 @@
         <tbody>
             {% for item in users %} {# ここを 'user' から 'item' に変更 #}
             <tr>
-                <td>{{ item.user.id }}</td>           {# item.user.id に変更 #}
-                <td>{{ item.user.username }}</td>    {# item.user.username に変更 #}
-                <td>{{ item.user.email }}</td>       {# item.user.email に変更 #}
+                <td>{{ item.id }}</td>           {# item.id に変更 #}
+                <td>{{ item.username }}</td>    {# item.username に変更 #}
+                <td>{{ item.email }}</td>       {# item.email に変更 #}
                 <td>
                     {# ロールは item.role_name を直接表示 #}
                     <span class="badge bg-info me-1">{{ item.role_name }}</span>
                 </td>
-                <td>{{ item.user.registration_date.strftime('%Y-%m-%d %H:%M') if item.user.registration_date else 'N/A' }}</td> {# item.user.registration_date に変更 #}
-                <td>{{ item.user.last_login.strftime('%Y-%m-%d %H:%M') if item.user.last_login else 'N/A' }}</td>             {# item.user.last_login に変更 #}
+                <td>{{ item.registration_date.strftime('%Y-%m-%d %H:%M') if item.registration_date else 'N/A' }}</td> {# item.registration_date に変更 #}
+                <td>{{ item.last_login.strftime('%Y-%m-%d %H:%M') if item.last_login else 'N/A' }}</td>             {# item.last_login に変更 #}
                 <td>
                     <div class="btn-group" role="group">
-                        <a href="{{ url_for('blog_admin_bp.edit_user', user_id=item.user.id) }}" class="btn btn-sm btn-info">編集（ロール変更も含む）</a> {# user_id=item.user.id に変更 #}
-                        <form action="{{ url_for('blog_admin_bp.delete_user', user_id=item.user.id) }}" method="POST" class="d-inline" onsubmit="return confirm('本当にこのユーザーを削除しますか？');"> {# user_id=item.user.id に変更 #}
+                        <a href="{{ url_for('blog_admin_bp.edit_user', user_id=item.id) }}" class="btn btn-sm btn-info">編集（ロール変更も含む）</a> {# user_id=item.id に変更 #}
+                        <form action="{{ url_for('blog_admin_bp.delete_user', user_id=item.id) }}" method="POST" class="d-inline" onsubmit="return confirm('本当にこのユーザーを削除しますか？');"> {# user_id=item.id に変更 #}
                             <button type="submit" class="btn btn-sm btn-danger">削除</button>
                         </form>
                     </div>
