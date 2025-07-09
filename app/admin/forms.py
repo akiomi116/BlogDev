@@ -29,7 +29,30 @@ class UserForm(FlaskForm):
     def validate_username(self, username):
         if self.obj and username.data == self.obj.username:
             return
+def __init__(self, *args, **kwargs):
+    self.obj = kwargs.get('obj', None)
+    super(CategoryForm, self).__init__(*args, **kwargs)
 
+def validate_name(self, name):
+    if self.obj and name.data == self.obj.name:
+        return
+
+    # 管理者は全カテゴリの一意性を検証
+    category = Category.query.filter_by(name=name.data).first()
+    if category:
+        raise ValidationError('そのカテゴリ名はすでに存在します。')
+
+def validate_slug(self, slug):
+    if not slug.data:
+        return
+
+    if self.obj and slug.data == self.obj.slug:
+        return
+
+    # 管理者は全スラッグの一意性を検証
+    category = Category.query.filter_by(slug=slug.data).first()
+    if category:
+        raise ValidationError('そのスラッグはすでに存在します。')
         user = User.query.filter_by(username=username.data).first()
         if user:
             raise ValidationError('そのユーザー名はすでに使われています。別のユーザー名を選んでください。')
