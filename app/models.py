@@ -156,7 +156,7 @@ class Image(db.Model):
     uploader = relationship('User', back_populates='uploaded_images') 
     post = relationship('Post', back_populates='images', foreign_keys=[post_id]) 
 
-    main_image_for_post = relationship('Post', back_populates='main_image', uselist=False, foreign_keys='Post.main_image_id')
+    main_image_for_post = relationship('Post', back_populates='main_image', uselist=False, foreign_keys='Post.main_image_id', overlaps="post_as_main_image")
 
 
     @property
@@ -203,6 +203,7 @@ class Post(db.Model):
         'Image', 
         backref=db.backref('post_as_main_image', uselist=False),
         foreign_keys=[main_image_id],
+        overlaps="main_image_for_post",
         post_update=True
     )
     images = relationship(

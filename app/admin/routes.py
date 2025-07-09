@@ -21,6 +21,24 @@ from app.decorators import roles_required
 
 from . import bp
 
+@bp.route('/show-routes')
+def show_routes():
+    import urllib
+    output = []
+    for rule in current_app.url_map.iter_rules():
+        options = {}
+        for arg in rule.arguments:
+            options[arg] = f"[{arg}]"
+
+        methods = ','.join(rule.methods)
+        url = urllib.parse.unquote(rule.rule)
+        line = f"{rule.endpoint:50s} {methods:20s} {url}"
+        output.append(line)
+    
+    output.sort()
+    
+    return "<pre>" + "\n".join(output) + "</pre>"
+
 import re
 
 def slugify(text):
@@ -76,90 +94,71 @@ def list_posts():
 @login_required
 @roles_required(['admin', 'editor', 'poster'])
 def new_post():
-    form = PostForm()
+    # POSTリクエストの場合、フォームデータを事前に処理する
+    if request.method == 'POST':
+        form_data = request.form.copy()
+        # JavaScript側から送られてくる'selected_image_id'をフォームが期待する'main_image'にマッピングする
+        if 'selected_image_id' in form_data and form_data['selected_image_id']:
+            form_data['main_image'] = form_data['selected_image_id']
+        form = PostForm(form_data)
+    else:
+        form = PostForm()
 
+    # GETとPOSTの両方で選択肢を動的に設定
     form.category.choices = [(str(c.id), c.name) for c in Category.query.all()]
-    form.tags.choices = [(t.id, t.name) for t in Tag.query.order_by(Tag.name).all()]
-    
+    # app/forms.pyのPostFormではtagsはQuerySelectMultipleFieldなので、この設定は不要かもしれないが、
+    # 既存のコードとの一貫性のために残す。もし不要なら削除する。
+    # form.tags.choices = [(t.id, t.name) for t in Tag.query.order_by(Tag.name).all()]
+
     if form.validate_on_submit():
         main_image_file = form.main_image_file.data
-        selected_main_image_id = form.main_image.data 
+        # QuerySelectFieldから返されるのはImageオブジェクトそのもの
+        selected_main_image_obj = form.main_image.data
 
         main_image_obj = None
-        upload_successful = False 
 
+        # 新しい画像がアップロードされた場合
         if main_image_file and main_image_file.filename and allowed_file(main_image_file.filename):
+            # ... (画像アップロード処理は変更なし) ...
             original_filename = secure_filename(main_image_file.filename)
-            # os.path.splitext(original_filename)[1] で拡張子を正確に取得
             unique_filename = str(uuid.uuid4()) + os.path.splitext(original_filename)[1]
-            
-            thumbnail_filename = 'thumb_' + unique_filename 
-
+            thumbnail_filename = 'thumb_' + unique_filename
             filepath_abs = os.path.join(current_app.config['UPLOAD_IMAGES_DIR'], unique_filename)
             thumbnail_filepath_abs = os.path.join(current_app.config['UPLOAD_THUMBNAILS_DIR'], thumbnail_filename)
-
             filepath_rel = os.path.join(current_app.config['UPLOAD_FOLDER_RELATIVE_PATH'], unique_filename).replace('\\', '/')
             thumbnail_filepath_rel = os.path.join(current_app.config['THUMBNAIL_FOLDER_RELATIVE_PATH'], thumbnail_filename).replace('\\', '/')
 
             try:
                 main_image_file.save(filepath_abs)
-                current_app.logger.info(f"Original image saved to: {filepath_abs}")
-
                 img = PilImage.open(filepath_abs)
-                img.thumbnail(current_app.config['THUMBNAIL_SIZE']) 
+                img.thumbnail(current_app.config['THUMBNAIL_SIZE'])
                 img.save(thumbnail_filepath_abs)
-                current_app.logger.info(f"Thumbnail saved to: {thumbnail_filepath_abs}")
-                upload_successful = True
-                
-            except FileNotFoundError as e:
-                current_app.logger.error(f"Image save/thumbnail error (directory not found): {e}", exc_info=True)
-                flash('画像の保存中にエラーが発生しました。アップロードディレクトリを確認してください。', 'danger')
-            except Exception as e:
-                current_app.logger.error(f"Image processing error for {unique_filename}: {e}", exc_info=True)
-                flash('画像の処理中に予期せぬエラーが発生しました。', 'danger')
-                thumbnail_filename = None 
-                upload_successful = False 
-
-            if upload_successful:
                 main_image_obj = Image(
                     original_filename=original_filename,
                     unique_filename=unique_filename,
-                    thumbnail_filename=thumbnail_filename, 
+                    thumbnail_filename=thumbnail_filename,
                     mimetype=main_image_file.mimetype,
-                    filepath=filepath_rel, 
-                    thumbnail_filepath=thumbnail_filepath_rel if thumbnail_filename else None, 
+                    filepath=filepath_rel,
+                    thumbnail_filepath=thumbnail_filepath_rel,
                     user_id=current_user.id,
                     alt_text=form.main_image_alt_text.data
                 )
                 db.session.add(main_image_obj)
-                db.session.flush()
-                current_app.logger.info(f"Image object created with ID: {main_image_obj.id}")
-            else:
+                db.session.flush() # IDを取得するためにflush
+            except Exception as e:
+                current_app.logger.error(f"Image processing error: {e}", exc_info=True)
+                flash('画像の処理中にエラーが発生しました。', 'danger')
                 return render_template('posts/edit_post.html', form=form, title='新規投稿', is_edit=False)
 
-        elif selected_main_image_id:
-            # Imageオブジェクトが来た場合はidを取り出す
-            if hasattr(selected_main_image_id, "id"):
-                image_id_to_fetch = selected_main_image_id.id
-            elif isinstance(selected_main_image_id, uuid.UUID):
-                image_id_to_fetch = selected_main_image_id
-            else:
-                try:
-                    image_id_to_fetch = str(selected_main_image_id)
-                except ValueError:
-                    current_app.logger.error(f"不正なUUID文字列が selected_main_image_id に渡されました: {selected_main_image_id}")
-                    flash('選択されたメイン画像の形式が不正です。', 'warning')
-                    return render_template('posts/edit_post.html', form=form, title='新規投稿', is_edit=False)
+        # 既存の画像が選択された場合
+        elif selected_main_image_obj:
+            main_image_obj = selected_main_image_obj
+            if form.main_image_alt_text.data:
+                main_image_obj.alt_text = form.main_image_alt_text.data
 
-            main_image_obj = db.session.get(Image, image_id_to_fetch) 
-            if main_image_obj:
-                if form.main_image_alt_text.data: 
-                    main_image_obj.alt_text = form.main_image_alt_text.data
-            else:
-                flash('選択された既存のメイン画像が見つかりません。', 'warning')
-                return render_template('posts/edit_post.html', form=form, title='新規投稿', is_edit=False)
-        else:
-            flash('メイン画像は必須です。ファイルをアップロードするか、ギャラリーから選択してください。', 'danger')
+        # メイン画像が最終的に確定しているかチェック (バリデーションを通過しているので基本的には大丈夫なはず)
+        if main_image_obj is None:
+            flash('メイン画像の処理でエラーが発生しました。もう一度お試しください。', 'danger')
             return render_template('posts/edit_post.html', form=form, title='新規投稿', is_edit=False)
 
         category = None
@@ -175,38 +174,22 @@ def new_post():
             main_image=main_image_obj
         )
         db.session.add(new_post)
-        db.session.flush()
-
-        selected_tags = []
+        
+        # タグと追加画像はPostオブジェクトがDBに追加された後に設定
         if form.tags.data:
-            # Tagオブジェクトのリストからidリストに変換
-            tag_ids = [tag.id for tag in form.tags.data]
-            selected_tags = Tag.query.filter(Tag.id.in_(tag_ids)).all()
-        new_post.tags = selected_tags
-
-        selected_additional_images = []
+            new_post.tags = form.tags.data
         if form.additional_images.data:
-            for item in form.additional_images.data:
-                if isinstance(item, uuid.UUID): 
-                    img_obj = db.session.get(Image, item)
-                    if img_obj:
-                        selected_additional_images.append(img_obj)
-                else: 
-                    try:
-                        img_obj = db.session.get(Image, str(item)) 
-                        if img_obj:
-                            selected_additional_images.append(img_obj)
-                    except ValueError:
-                        current_app.logger.warning(f"不正なUUID文字列が追加画像の選択に渡されました: {item}")
-            selected_additional_images = [img for img in selected_additional_images if img is not None]
-            
-        new_post.additional_images = selected_additional_images
+            new_post.additional_images = form.additional_images.data
 
         db.session.commit()
         flash('新しい投稿が作成されました。', 'success')
-        current_app.logger.info(f"New post '{new_post.title}' created by {current_user.username} (ID: {new_post.id})")
         return redirect(url_for('blog_admin_bp.list_posts'))
     
+    # バリデーション失敗時
+    elif request.method == 'POST':
+        # エラー内容をログに出力
+        current_app.logger.warning(f"Post form validation failed: {form.errors}")
+
     return render_template('posts/edit_post.html', form=form, title='新規投稿', is_edit=False)
 
 
@@ -814,7 +797,8 @@ def delete_user(user_id):
 def list_comments():
     # コメント一覧を取得してテンプレートに渡す
     comments = Comment.query.all()
-    return render_template('admin/comments.html', comments=comments)
+    delete_form = DeleteForm()
+    return render_template('admin/comments.html', comments=comments, delete_form=delete_form)
 
 @bp.route('/roles')
 @login_required

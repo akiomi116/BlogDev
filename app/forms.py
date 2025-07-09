@@ -2,14 +2,13 @@
 
 from flask_wtf import FlaskForm
 from flask_wtf.file import FileField, MultipleFileField, FileAllowed, FileRequired
-from wtforms import StringField, TextAreaField, BooleanField, SubmitField, PasswordField, EmailField, SelectField, SelectMultipleField
+from wtforms import StringField, TextAreaField, BooleanField, SubmitField, PasswordField, SelectField, SelectMultipleField
+from wtforms.fields import EmailField
 from wtforms.validators import DataRequired, Length, Email, EqualTo, ValidationError, Optional
-
-# wtforms_sqlalchemy.fields からインポート
 from wtforms_sqlalchemy.fields import QuerySelectField, QuerySelectMultipleField
 
-import uuid # UUIDTypeField のデフォルト値として uuid.uuid4 を使う場合に必要
-from app.models import Category, Tag, Image, User, Role # Role モデルをインポート
+import uuid  # UUIDTypeField のデフォルト値として uuid.uuid4 を使う場合に必要
+from app.models import Category, Tag, Image, User, Role  # Role モデルをインポート
 
 class DeleteForm(FlaskForm):
     """汎用的な削除確認フォーム（CSRFトークンのみ）"""
@@ -115,10 +114,22 @@ class PostForm(FlaskForm):
     is_published = BooleanField('公開する')
     submit = SubmitField('投稿を作成')
 
+    def __init__(self, *args, **kwargs):
+        super(PostForm, self).__init__(*args, **kwargs)
+        self.obj = kwargs.get('obj')
+
     def validate(self, extra_validators=None):
         rv = super().validate(extra_validators=extra_validators)
         if not rv:
             return False
+        
+        if not self.obj: # Only for new posts
+            if not self.main_image_file.data and not self.main_image.data:
+                msg = 'メイン画像は必須です。ファイルをアップロードするか、ギャラリーから選択してください。'
+                self.main_image.errors.append(msg)
+                self.main_image_file.errors.append(msg)
+                return False
+        return True
 
 class ImageUploadForm(FlaskForm):
     """単一画像アップロードフォーム（Alt Text付き）"""
@@ -156,7 +167,7 @@ class TagForm(FlaskForm):
 
 class CommentForm(FlaskForm):
     """コメントフォーム"""
-    author_name = StringField('名前', validators=[DataRequired()])
+    author_name = StringField('名前', validators=[Optional()])
     body = TextAreaField('コメント', validators=[DataRequired()])
     submit = SubmitField('コメントを送信')
 

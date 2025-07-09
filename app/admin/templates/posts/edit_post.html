@@ -133,8 +133,6 @@
 
 {% block scripts_extra %}
 {{ super() }}
-{# Bootstrap JS CDN の integrity 属性から 'x' を削除。このコメントはHTMLコメントです #}
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js" integrity="sha384-geWF76RCwLtnZ8qwWowPQNguL3RmwHVBC9FhGdlKrxdiJJigF/h/6tIed9Ltxm+" crossorigin="anonymous"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const editPostForm = document.getElementById('editPostForm');

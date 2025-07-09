@@ -67,8 +67,8 @@ def post_detail(post_id):
             #current_app.logger.debug("DEBUG: Comment form validation successful.")
             try:
                 comment = Comment(
-                    body=comment_form.body.data,  # ←ここをbodyに
-                    author_name=comment_form.author_name.data,  # author_nameカラムがあれば
+                    body=comment_form.body.data,
+                    author_name=current_user.username,  # Use logged-in user's name
                     user_id=current_user.id,
                     post_id=post.id,
                     is_approved=False

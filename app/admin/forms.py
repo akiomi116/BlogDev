@@ -70,7 +70,7 @@ class UserRoleForm(FlaskForm):
 
 
 # --- 投稿関連フォーム (管理者・編集者用) ---
-class PostForm(FlaskForm):
+"""class PostForm(FlaskForm):
     title = StringField('タイトル', validators=[DataRequired(), Length(min=1, max=255)])
     body = TextAreaField('本文', validators=[DataRequired()])
 
@@ -92,6 +92,7 @@ class PostForm(FlaskForm):
 
     def __init__(self, *args, **kwargs):
         super(PostForm, self).__init__(*args, **kwargs)
+        self.obj = kwargs.get('obj')
 
         # カテゴリの選択肢を設定 (管理者は全てのカテゴリを、編集者は自身のカテゴリを対象にすることも可能だが、ここでは全てのカテゴリを対象)
         categories = Category.query.order_by(Category.name.asc()).all()
@@ -113,6 +114,20 @@ class PostForm(FlaskForm):
 
         self.main_image.choices = [('', 'なし')] + [(str(img.id), img.unique_filename) for img in images]
         self.additional_images.choices = [(str(img.id), img.unique_filename) for img in images]
+
+    def validate(self):
+        rv = super(PostForm, self).validate()
+        if not rv:
+            return False
+        
+        # 新規投稿の場合(self.obj is None)、メイン画像は必須
+        if not self.obj:
+            if not self.main_image_file.data and not self.main_image.data:
+                msg = 'メイン画像は必須です。ファイルをアップロードするか、ギャラリーから選択してください。'
+                self.main_image.errors.append(msg)
+                self.main_image_file.errors.append(msg)
+                return False
+        return True""
 
 
 # --- カテゴリ関連フォーム (管理者・編集者用) ---
