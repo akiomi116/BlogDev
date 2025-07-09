@@ -746,16 +746,15 @@ def edit_user(user_id):
             user.password_hash = generate_password_hash(form.password.data)
         
         # ロールの更新
-        selected_roles = []
-        if form.role.data:
-            selected_roles = Role.query.filter(Role.id.in_(form.role.data)).all()
-        user.roles = selected_roles
+        # form.roles.data は QuerySelectMultipleField から返される Role オブジェクトのリスト
+        user.roles = form.roles.data
 
         db.session.commit()
         flash('ユーザー情報が更新されました。', 'success')
         return redirect(url_for('blog_admin_bp.list_users'))
     elif request.method == 'GET':
-        form.role.data = user.role.id if user.role else None
+        # QuerySelectMultipleFieldはIDのリストを期待する
+        form.roles.data = [role for role in user.roles] # user.rolesはRoleオブジェクトのリスト
 
     return render_template('users/edit_user.html', form=form, user=user, title='ユーザー編集')
 

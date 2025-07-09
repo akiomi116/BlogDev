@@ -1,16 +1,13 @@
 # F:\dev\BrogDev\app\routes\auth.py
 
 from flask import Blueprint, render_template, redirect, url_for, flash, request, current_app
-from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import login_user, logout_user, login_required, current_user
-from app.models import User, Role # User, Role モデルをインポート
-from app.extensions import db, mail # mail 拡張機能をインポート
-from flask_mail import Message # Flask-Mail の Message クラスをインポート
-import uuid # UUID を使用するため
-import pytz # タイムゾーン対応の datetime
-from datetime import datetime
-
-from app.forms import LoginForm, RegistrationForm, ResetPasswordRequestForm, ResetPasswordForm, ChangePasswordForm
+from werkzeug.security import generate_password_hash, check_password_hash
+from app.models import User, Role # Import Role
+from app.extensions import db
+from app.forms import LoginForm, RegistrationForm, ChangePasswordForm, ResetPasswordRequestForm, ResetPasswordForm
+# from app.email import send_password_reset_email
+from app.decorators import roles_required
 
 bp = Blueprint('auth', __name__)
 
@@ -65,6 +62,7 @@ def register():
         return redirect(url_for('home.index'))
     form = RegistrationForm()
     if form.validate_on_submit():
+        print(form.errors)
         user_role = Role.query.filter_by(name='user').first()
         if not user_role:
             user_role = Role(name='user')
@@ -72,12 +70,17 @@ def register():
             db.session.commit() 
         
         user = User(
-            username=form.username.data, 
+            username=form.username.data,
             email=form.email.data,
-            password_hash=generate_password_hash(form.password.data),
-            roles=[user_role], 
-            created_at=datetime.now(pytz.utc) 
+            password_hash=generate_password_hash(form.password.data)
         )
+        # Assign default 'user' role
+        user_role = Role.query.filter_by(name='user').first()
+        if user_role:
+            user.role = user_role
+        else:
+            current_app.logger.warning("Default 'user' role not found during registration.")
+
         db.session.add(user)
         db.session.commit()
         flash('登録ありがとうございます！これでログインできます。', 'success')
@@ -92,23 +95,23 @@ def reset_password_request():
     if form.validate_on_submit():
         user = User.query.filter_by(email=form.email.data).first()
         if user:
-            send_password_reset_email(user)
-        flash('パスワードリセットの手順をメールで送信しました。', 'info')
-        return redirect(url_for('auth.login')) # 明示的にエンドポイント名を指定
+            # send_password_reset_email(user)
+            flash('パスワードリセットの手順をメールで送信しました。', 'info')
+            return redirect(url_for('auth.login')) # 明示的にエンドポイント名を指定
     return render_template('auth/reset_password_request.html', title='パスワードリセット', form=form)
 
-def send_password_reset_email(user):
-    token = user.get_reset_password_token()
-    msg = Message(
-        'パスワードリセットの依頼',
-        sender=current_app.config['MAIL_USERNAME'],
-        recipients=[user.email]
-    )
-    # url_for の呼び出しでブループリント名.エンドポイント名 を使用することを徹底
-    reset_url = url_for('auth.reset_password', token=token, _external=True) 
-    msg.body = render_template('email/reset_password.txt', user=user, reset_url=reset_url)
-    msg.html = render_template('email/reset_password.html', user=user, reset_url=reset_url)
-    mail.send(msg)
+# def send_password_reset_email(user):
+#     token = user.get_reset_password_token()
+#     msg = Message(
+#         'パスワードリセットの依頼',
+#         sender=current_app.config['MAIL_USERNAME'],
+#         recipients=[user.email]
+#     )
+#     # url_for の呼び出しでブループリント名.エンドポイント名 を使用することを徹底
+#     reset_url = url_for('auth.reset_password', token=token, _external=True) 
+#     msg.body = render_template('email/reset_password.txt', user=user, reset_url=reset_url)
+#     msg.html = render_template('email/reset_password.html', user=user, reset_url=reset_url)
+#     mail.send(msg)
 
 @bp.route('/reset_password/<token>', methods=['GET', 'POST'], endpoint='reset_password') # ★追加: endpoint='reset_password'
 def reset_password(token):

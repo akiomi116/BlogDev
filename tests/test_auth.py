@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 # tests/test_auth.py
 import pytest
 from app import db
@@ -15,10 +16,9 @@ def test_register_new_user_data(client):
     """新しいユーザーが正常に登録できるかテスト"""
     response = client.post('/auth/register', data={
         'username': 'newuser',
-        'name': 'New User',
         'email': 'newuser@example.com',
         'password': 'password123',
-        'confirm_password': 'password123'
+        'password2': 'password123'
     }, follow_redirects=True) # リダイレクトを自動的に追跡
 
     print(response.data.decode('utf-8'))
@@ -32,21 +32,26 @@ def test_register_new_user_data(client):
         assert user is not None
         assert user.email == 'newuser@example.com'
 
-def test_register_duplicate_username(client, new_user_data):
+def test_register_duplicate_username(client):
     """重複ユーザー名での登録が拒否されるかテスト"""
-    # new_user_dataフィクスチャにより、testuserが事前にDBに登録される
+    with client.application.app_context():
+        # Create and add a user directly within the test function
+        user = User(username='testuser', email='test@example.com')
+        user.set_password('password123')
+        db.session.add(user)
+        db.session.commit()
+
     response = client.post('/auth/register', data={
-        'username': 'testuser', # 既存のユーザー名
-        'name': 'New User',
-        'email': 'test2@example.com',
-        'password': 'password123',
-        'confirm_password': 'password123'
-    }, follow_redirects=True)
+            'username': 'testuser', # 既存のユーザー名
+            'email': 'test2@example.com',
+            'password': 'password123',
+            'password2': 'password123'
+        }, follow_redirects=True)
 
     print(response.data.decode('utf-8'))
     
     assert response.status_code == 200
-    assert "このユーザー名は既に使われています。".encode('utf-8') in response.data # エラーメッセージ
+    assert "このユーザー名は既に使われています。" in response.data.decode('utf-8') # エラーメッセージ
     
     # データベースに新しいユーザーが追加されていないことを確認
     with client.application.app_context():

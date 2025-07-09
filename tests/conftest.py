@@ -20,11 +20,11 @@ def app():
         "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:", # メモリ上のDBを使用
         "WTF_CSRF_ENABLED": False # テスト中はCSRFを無効にすることが多い
     })
-
     with app.app_context():
-        db.create_all() # テスト用DBにテーブルを作成
-        yield app # アプリケーションインスタンスをテストに渡す
-        db.drop_all() # テスト終了後にDBをクリア
+        db.create_all() # Create tables once for the session
+    yield app
+    with app.app_context():
+        db.drop_all() # Drop tables once after the session
 
 @pytest.fixture(scope='function')
 def client(app):
@@ -45,6 +45,19 @@ def new_user_data():
         'password': 'password123'
     }
 
+@pytest.fixture(scope='function')
+def session(app):
+    """各テスト関数でトランザクションを管理するフィクスチャ"""
+    with app.app_context():
+        connection = db.engine.connect()
+        transaction = connection.begin()
+        db.session.configure(bind=connection)
+
+        yield db.session
+
+        transaction.rollback()
+        connection.close()
+
 @pytest.fixture
 def new_user():
     """テスト用のユーザーデータを作成するフィクスチャ"""
@@ -61,42 +74,24 @@ def new_user():
     return user
 
 @pytest.fixture(scope='function')
-def logged_in_client(client, app, new_user_data): # 'app' と 'new_user_data' を受け取る
+def logged_in_client(client, app, new_user_data, session): # Added session
     """ログイン済みのテストクライアントを生成するフィクスチャ"""
 
-    # app_context内でユーザーを作成し、セッションにバインド
-    with app.app_context():
-        existing_user = User.query.filter_by(username=new_user_data['username']).first()
-        if existing_user:
-            db.session.delete(existing_user)
-            db.session.commit()
-        
-        user = User(username=new_user_data['username'], email=new_user_data['email'])
-        user.set_password(new_user_data['password'])
-        db.session.add(user)
-        db.session.commit() # コミット後、この user オブジェクトはデタッチされる可能性がある
+    # Create user within the session context
+    existing_user = User.query.filter_by(username=new_user_data['username']).first()
+    if existing_user:
+        session.delete(existing_user)
+        session.commit() # Commit deletion
 
-        # ログイン後、ユーザー情報を再度DBから取得し直すことで、セッションにバインドされた状態のオブジェクトを保証
-        # ただし、ログイン処理自体でセッションが生成・利用されるため、ここでの再取得は必須ではない場合も
-        # 確実性を高めるためであれば検討
-        # user_from_db = User.query.filter_by(username=new_user_data['username']).first()
-        # if user_from_db:
-        #    print(f"User from DB: {user_from_db}") # デバッグ用
+    user = User(username=new_user_data['username'], email=new_user_data['email'])
+    user.set_password(new_user_data['password'])
+    session.add(user)
+    session.commit() # Commit user creation
 
     # ログインリクエストを送信
-    # ここで new_user_data の辞書から直接 username を取得
     response = client.post('/auth/login', data={
-        'username': new_user_data['username'], # 辞書からusernameを取得
+        'username': new_user_data['username'],
         'password': new_user_data['password']
     }, follow_redirects=True)
 
-    # yield で client を返し、テスト関数がこのクライアントを使用できるようにする
-    yield client 
-
-    # テスト終了後のクリーンアップ（オプションだが推奨）
-    # 各テスト関数が独立して実行されるように、作成したユーザーを削除
-    with app.app_context():
-        user_to_delete = User.query.filter_by(username=new_user_data['username']).first()
-        if user_to_delete:
-            db.session.delete(user_to_delete)
-            db.session.commit()
+    yield client

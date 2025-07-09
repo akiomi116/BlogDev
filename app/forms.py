@@ -5,6 +5,7 @@ from flask_wtf.file import FileField, MultipleFileField, FileAllowed, FileRequir
 from wtforms import StringField, TextAreaField, BooleanField, SubmitField, PasswordField, SelectField, SelectMultipleField
 from wtforms.fields import EmailField
 from wtforms.validators import DataRequired, Length, Email, EqualTo, ValidationError, Optional
+from app.extensions import db
 from wtforms_sqlalchemy.fields import QuerySelectField, QuerySelectMultipleField
 
 import uuid  # UUIDTypeField のデフォルト値として uuid.uuid4 を使う場合に必要
@@ -31,9 +32,12 @@ class RegistrationForm(FlaskForm):
     submit = SubmitField('登録')
 
     def validate_username(self, username):
+        print("validate_username called")
         user = User.query.filter_by(username=username.data).first()
         if user is not None:
+            print("User found in validate_username")
             raise ValidationError('そのユーザー名はすでに使われています。')
+            print(f"Expected error message bytes: {'そのユーザー名はすでに使われています。'.encode('utf-8')}")
 
     def validate_email(self, email):
         user = User.query.filter_by(email=email.data).first()
