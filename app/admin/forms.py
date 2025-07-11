@@ -138,8 +138,8 @@ class PostForm(FlaskForm):
         self.main_image.choices = [('', 'なし')] + [(str(img.id), img.unique_filename) for img in images]
         self.additional_images.choices = [(str(img.id), img.unique_filename) for img in images]
 
-    def validate(self):
-        rv = super(PostForm, self).validate()
+    def validate(self, extra_validators=None):
+        rv = super(PostForm, self).validate(extra_validators=extra_validators)
         if not rv:
             return False
         
@@ -147,7 +147,6 @@ class PostForm(FlaskForm):
         if not self.obj:
             if not self.main_image_file.data and not self.main_image.data:
                 msg = 'メイン画像は必須です。ファイルをアップロードするか、ギャラリーから選択してください。'
-                self.main_image.errors.append(msg)
                 self.main_image_file.errors.append(msg)
                 return False
         return True""

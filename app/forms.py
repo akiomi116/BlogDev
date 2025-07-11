@@ -130,7 +130,6 @@ class PostForm(FlaskForm):
         if not self.obj: # Only for new posts
             if not self.main_image_file.data and not self.main_image.data:
                 msg = 'メイン画像は必須です。ファイルをアップロードするか、ギャラリーから選択してください。'
-                self.main_image.errors.append(msg)
                 self.main_image_file.errors.append(msg)
                 return False
         return True
