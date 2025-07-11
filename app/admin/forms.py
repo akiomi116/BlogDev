@@ -93,7 +93,7 @@ class UserRoleForm(FlaskForm):
 
 
 # --- 投稿関連フォーム (管理者・編集者用) ---
-"""class PostForm(FlaskForm):
+class PostForm(FlaskForm):
     title = StringField('タイトル', validators=[DataRequired(), Length(min=1, max=255)])
     body = TextAreaField('本文', validators=[DataRequired()])
 
