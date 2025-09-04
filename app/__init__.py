@@ -12,14 +12,25 @@ from flask_login import current_user
 
 import config # config モジュールをインポート
 
+
 # app.extensions から拡張機能をインポート
-from app.extensions import db, migrate, login_manager, csrf, babel, mail 
+# security, principals, user_datastore を追加
+from app.extensions import db, migrate,  csrf, babel, mail, security, principals, user_datastore
+# SQLAlchemyUserDatastore を直接インポート
+from flask_security import SQLAlchemyUserDatastore
+# identity_loaded, RoleNeed, UserNeed を直接インポート
+from flask_principal import identity_loaded, RoleNeed, UserNeed
 
 # ブループリントをインポート
 from app.admin import bp as blog_admin_bp 
 from app.routes.home import home_bp
 from app.routes.auth import bp as auth_bp 
 from app.routes.posts import public_posts_bp 
+
+# Flask-Security-Too のロガーを直接取得して設定
+logging.getLogger('flask_security').setLevel(logging.DEBUG) # ★この行を追加★
+logging.getLogger('flask_principal').setLevel(logging.DEBUG) # ★この行も追加★
+
 
 
 # アプリケーションファクトリ関数
@@ -30,6 +41,8 @@ def create_app(config_class=config.Config):
     app = Flask(__name__, static_folder=os.path.join(config.BASE_DIR, 'static')) 
     
     app.config.from_object(config_class)
+    
+    print(f"DEBUG: app.config['SECRET_KEY'] = {app.config.get('SECRET_KEY')}")
     
     # アップロードディレクトリが存在することを確認し、なければ作成します
     os.makedirs(app.config['UPLOAD_IMAGES_DIR'], exist_ok=True)
@@ -47,26 +60,69 @@ def create_app(config_class=config.Config):
     #app.logger.debug(f"DEBUG: UPLOAD_THUMBNAILS_DIR (Absolute): {app.config.get('UPLOAD_THUMBNAILS_DIR')}")
     #app.logger.debug(f"DEBUG: UPLOAD_FOLDER_RELATIVE_PATH (Relative from static): {app.config.get('UPLOAD_FOLDER_RELATIVE_PATH')}")
     #app.logger.debug(f"DEBUG: THUMBNAIL_FOLDER_RELATIVE_PATH (Relative from static): {app.config.get('THUMBNAIL_FOLDER_RELATIVE_PATH')}")
-
+    @app.before_request
+    def debug_user_loading():
+        # ログイン試行後のリダイレクト先や、 subsequent requests で呼ばれる
+        # current_user のデバッグ
+        if current_user.is_authenticated:
+            app.logger.debug(f"DEBUG (before_request): current_user is authenticated. ID: {current_user.id}, Email: {current_user.email}, FS_Uniquifier: {current_user.fs_uniquifier}")
+        else:
+            app.logger.debug(f"DEBUG (before_request): current_user is NOT authenticated.")
+    # ★★★ここまで追加★★
 
     # 拡張機能の初期化
     db.init_app(app)
     migrate.init_app(app, db)
-    login_manager.init_app(app)
+    # login_manager.init_app(app)
     csrf.init_app(app)
     babel.init_app(app) # Babelの初期化
     mail.init_app(app)
     
-    # ログインマネージャーの設定
-    login_manager.login_view = 'auth.login'
-    login_manager.login_message = 'このページにアクセスするにはログインしてください。'
-    login_manager.login_message_category = 'info'
+     # Flask-SecurityとFlask-Principalの初期化をここに追加
+    from app.models import User, Role # User と Role モデルをインポート
+    
+    # user_datastore を初期化
+    # extensions.py で定義した user_datastore 変数をここで上書きします。
+    # Pythonのimportの仕組み上、extensions.pyでNoneとして初期化されたuser_datastoreは、
+    # ここでインスタンス化することで、extensions.pyから参照されるsecurityオブジェクトにも反映されます。
+    # もしこれが上手くいかない場合は、security.user_datastore = ... のように直接代入することも検討します。
+    security.user_datastore = SQLAlchemyUserDatastore(db, User, Role) 
+    
+    # Securityを初期化
+    security.init_app(app, datastore=security.user_datastore) # datastore 引数を明示的に指定
 
-    # User Loader の設定
-    from app.models import User 
-    @login_manager.user_loader
-    def load_user(user_id):
-        return db.session.get(User, user_id)
+    # Principalを初期化
+    principals.init_app(app)
+
+    # identity_loaded シグナルハンドラを設定
+    # ユーザーがログインした時、またはセッションからロードされた時に、
+    # そのユーザーのロール情報を g.identity.provides に追加します。
+    @identity_loaded.connect_via(app)
+    def on_identity_loaded(sender, identity):
+        # 現在のユーザーオブジェクトを identity.user に設定
+        identity.user = current_user
+
+        # ユーザーの持つロールを RoleNeed オブジェクトとして identity.provides に追加
+        # これにより、@roles_required デコレータがこれらのロールをチェックできるようになります。
+        if hasattr(current_user, 'roles'):
+            for role in current_user.roles:
+                identity.provides.add(RoleNeed(role.name))
+        
+        # オプション: ユーザーID自体も UserNeed として追加すると、
+        # 特定のユーザーにのみ許可するパーミッションを作成する際に便利です。
+        # identity.provides.add(UserNeed(current_user.id))
+
+    
+    # # ログインマネージャーの設定
+    # login_manager.login_view = 'auth.login'
+    # login_manager.login_message = 'このページにアクセスするにはログインしてください。'
+    # login_manager.login_message_category = 'info'
+
+    # # User Loader の設定
+    # from app.models import User 
+    # @login_manager.user_loader
+    # def load_user(user_id):
+    #     return db.session.get(User, user_id)
 
     # ロギングの設定
     if not app.debug and not app.testing:
@@ -80,9 +136,9 @@ def create_app(config_class=config.Config):
 
         # stdout へのロギング設定 (Gunicorn などでコンソール出力を見るため)
         stream_handler = logging.StreamHandler()
-        stream_handler.setLevel(logging.INFO)
+        stream_handler.setLevel(logging.DEBUGINFO)
         app.logger.addHandler(stream_handler) 
-        app.logger.setLevel(logging.INFO) 
+        app.logger.setLevel(logging.DEBUG) 
         app.logger.info('Akiomi Blog startup')
 
     # コンテキストプロセッサ: 全てのテンプレートで 'current_year' を利用可能にする

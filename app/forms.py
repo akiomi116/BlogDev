@@ -1,7 +1,7 @@
 # F:\dev\BrogDev\app\forms.py
 
 from flask_wtf import FlaskForm
-from flask_wtf.file import FileField, MultipleFileField, FileAllowed, FileRequired
+from flask_wtf.file import  MultipleFileField, FileAllowed, FileRequired, FileField
 from wtforms import StringField, TextAreaField, BooleanField, SubmitField, PasswordField, SelectField, SelectMultipleField
 from wtforms.fields import EmailField
 from wtforms.validators import DataRequired, Length, Email, EqualTo, ValidationError, Optional
@@ -70,9 +70,8 @@ class PostForm(FlaskForm):
     body = TextAreaField('本文', validators=[DataRequired()])
     
     # メイン画像用のファイルアップロードフィールド
-    main_image_file = FileField('メイン画像アップロード', validators=[
-        Optional(), 
-        FileAllowed(['jpg', 'jpeg', 'png', 'gif', 'webp'], '画像ファイル (JPG, JPEG, PNG, GIF, WEBP) のみ許可されます')
+    main_image_file = FileField('メイン画像アップロード', validators=[Optional()
+        #FileAllowed(['jpg', 'jpeg', 'png', 'gif', 'webp'], '画像ファイル (JPG, JPEG, PNG, GIF, WEBP) のみ許可されます')
     ])
     
     # 既存のメイン画像を選択するためのフィールド (IDをhiddenで送る想定)
@@ -122,13 +121,30 @@ class PostForm(FlaskForm):
         super(PostForm, self).__init__(*args, **kwargs)
         self.obj = kwargs.get('obj')
 
+    
     def validate(self, extra_validators=None):
-        rv = super().validate(extra_validators=extra_validators)
+        rv = super(PostForm, self).validate(extra_validators=extra_validators)
         if not rv:
             return False
         
-        if not self.obj: # Only for new posts
-            if not self.main_image_file.data and not self.main_image.data:
+        # 新規投稿の場合(self.obj is None)、メイン画像は必須
+        if not self.obj:
+            file_data = self.main_image_file.data
+            has_upload = False
+            
+            if file_data and file_data.filename:
+            # ここが大事
+                if hasattr(file_data, 'content_length'):
+                    has_upload = file_data.content_length and file_data.content_length > 0
+                else:
+                # 古いWerkzeug用
+                    file_data.stream.seek(0, os.SEEK_END)
+                    has_upload = file_data.stream.tell() > 0
+                    file_data.stream.seek(0)
+
+            has_gallery_selection = self.main_image.data is not None
+
+            if not (has_upload or has_gallery_selection):
                 msg = 'メイン画像は必須です。ファイルをアップロードするか、ギャラリーから選択してください。'
                 self.main_image_file.errors.append(msg)
                 return False

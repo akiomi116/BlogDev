@@ -2,7 +2,7 @@
 
 from flask_wtf import FlaskForm
 from flask_wtf.file import FileField, FileAllowed
-from wtforms import StringField, PasswordField, SubmitField, TextAreaField, SelectField, BooleanField, MultipleFileField, SelectMultipleField
+from wtforms import StringField, PasswordField, SubmitField, TextAreaField, SelectField, BooleanField, MultipleFileField, SelectMultipleField, HiddenField
 from wtforms.validators import DataRequired, Email, EqualTo, ValidationError, Length, Optional, Regexp
 from app.models import User, Category, Tag, Role, Image # モデルをインポート
 from flask_login import current_user # フォーム内でcurrent_userを使うため
@@ -97,6 +97,9 @@ class PostForm(FlaskForm):
     title = StringField('タイトル', validators=[DataRequired(), Length(min=1, max=255)])
     body = TextAreaField('本文', validators=[DataRequired()])
 
+    # ギャラリーから選択された画像のIDを保持する HiddenField
+    selected_image_id = HiddenField('選択された画像ID')
+    
     main_image_file = FileField('新しいメイン画像をアップロード (任意)', validators=[
         FileAllowed(['jpg', 'png', 'jpeg', 'gif', 'webp'], '画像ファイル (JPG, PNG, JPEG, GIF, WEBP) のみアップロード可能です！'),
         Optional()
@@ -149,7 +152,7 @@ class PostForm(FlaskForm):
                 msg = 'メイン画像は必須です。ファイルをアップロードするか、ギャラリーから選択してください。'
                 self.main_image_file.errors.append(msg)
                 return False
-        return True""
+        return True
 
 
 # --- カテゴリ関連フォーム (管理者・編集者用) ---

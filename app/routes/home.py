@@ -18,6 +18,9 @@ home_bp = Blueprint('home', __name__)
 @home_bp.route('/')
 @home_bp.route('/index')
 def index():
+    print(f"DEBUG (home.index): current_user.is_authenticated = {current_user.is_authenticated}")
+    print(f"DEBUG (home.index): current_user.email = {current_user.email if current_user.is_authenticated else 'Not authenticated'}")
+    
     #logger.debug("DEBUG(home): index route accessed.")
     page = request.args.get('page', 1, type=int)
     posts_pagination = Post.query.filter_by(is_published=True).order_by(Post.created_at.desc()).paginate(

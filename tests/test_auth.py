@@ -51,7 +51,7 @@ def test_register_duplicate_username(client):
     print(response.data.decode('utf-8'))
     
     assert response.status_code == 200
-    assert "このユーザー名は既に使われています。" in response.data.decode('utf-8') # エラーメッセージ
+    assert "This username is already in use." in response.data.decode('utf-8') # エラーメッセージ
     
     # データベースに新しいユーザーが追加されていないことを確認
     with client.application.app_context():

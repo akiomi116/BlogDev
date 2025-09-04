@@ -68,27 +68,35 @@
 
         <div class="mb-3">
             <label class="form-label">メイン画像:</label>
+
+            {# WTFormsが生成するギャラリー選択用のHiddenField #}
+            {{ form.selected_image_id() }} 
+
             <div id="selectedImagePreview" class="mb-2" style="display: none;">
                 <img src="" alt="Selected Image" class="img-fluid rounded" style="max-width: 200px; height: auto;">
                 <p class="text-muted small mt-1"><span id="selectedImageFilename"></span></p>
                 <button type="button" class="btn btn-sm btn-outline-danger mt-1" id="clearSelectedImage">選択を解除</button>
             </div>
 
-            {# form.main_image_id を直接出力。これはWTFormsで追加したHiddenFieldに対応 #}
-            {{ form.main_image() }} 
-
             <div class="d-flex align-items-center mb-2">
+                {# WTFormsが生成するファイルアップロード用のフィールドのラベル #}
                 {{ form.main_image_file.label(class="form-label mb-0 me-2") }}
+                {# WTFormsが生成するファイルアップロード用の入力要素 #}
                 {{ form.main_image_file(class="form-control w-auto") }}
                 <button type="button" class="btn btn-outline-secondary ms-2" data-bs-toggle="modal" data-bs-target="#imageGalleryModal" id="openImageGallery">ギャラリーから選択</button>
             </div>
+
+            {# WTFormsのエラーメッセージを表示するブロック #}
             {% if form.main_image_file.errors %}
                 <div class="text-danger">
                     {% for error in form.main_image_file.errors %}{{ error }}{% endfor %}
                 </div>
             {% endif %}
+
             <small class="form-text text-muted">ファイルをアップロードするか、ギャラリーから既存の画像を選択してください。両方選択された場合は、アップロードされたファイルが優先されます。</small>
         </div>
+
+
 
         <div class="form-check mb-3">
             {{ form.is_published(class="form-check-input") }}
@@ -139,7 +147,8 @@ document.addEventListener('DOMContentLoaded', function() {
     const selectedImageElement = selectedImagePreview.querySelector('img');
     const selectedImageFilenameElement = document.getElementById('selectedImageFilename');
     // Flaskフォームのform.main_image_idに対応
-    const mainImageIdInput = document.getElementById('main_image'); 
+    // const mainImageIdInput = document.getElementById('main_image'); 
+    const selectedImageIdInput = document.getElementById('selected_image_id');
     const mainImageFileInput = document.getElementById('main_image_file');
     const clearSelectedImageButton = document.getElementById('clearSelectedImage');
     const imageGalleryModalElement = document.getElementById('imageGalleryModal'); 

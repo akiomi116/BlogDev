@@ -1,108 +1,117 @@
-# F:\dev\BrogDev\app\cli.py
+# app/cli.py
 
 import click
 from flask.cli import with_appcontext
-from app.extensions import db
-from app.models import Role, User # UserモデルとRoleモデルをインポート
-from werkzeug.security import generate_password_hash # パスワードハッシュ化のためにインポート
-import os # 環境変数を取得するためにインポート
+import os
+
+from flask_security.utils import hash_password
+from app.extensions import db, security
+from app.models import User, Role
+
+
+
 
 @click.group()
 def init():
-    """Database initialization commands."""
+    """アプリケーションの初期化と管理コマンド."""
     pass
+
 
 @init.command("roles")
 @with_appcontext
 def init_roles():
-    """Create initial roles if they don't exist."""
-    if Role.query.count() == 0:
-        admin_role = Role(name='admin', description='Administrator with full access.')
-        poster_role = Role(name='poster', description='User who can create and manage posts.')
-        user_role = Role(name='user', description='Standard user with view access.')
+    """初期ロール（admin, poster, user）を作成します。"""
+    security.datastore.find_or_create_role(
+        'admin', description='Administrator with full access.'
+    )
+    security.datastore.find_or_create_role(
+        'poster', description='User who can create and manage posts.'
+    )
+    security.datastore.find_or_create_role(
+        'user', description='Standard user with view access.'
+    )
+    db.session.commit()
+    click.echo("デフォルトロール (admin, poster, user) が作成または見つかりました。")
 
-        db.session.add_all([admin_role, poster_role, user_role])
-        db.session.commit()
-        click.echo("Default roles (admin, poster, user) created.")
-    else:
-        click.echo("Roles already exist. Skipping creation.")
 
-# --- ここから新しいコマンドを追加 ---
 @init.command("admin-user")
-@click.option('--username', default='admin', help='Username for the admin user.')
-@click.option('--email', default='admin@example.com', help='Email for the admin user.')
+@click.option('--username', default='admin', help='管理者ユーザーのユーザー名.')
+@click.option('--email', default='admin@example.com', help='管理者ユーザーのメールアドレス.')
 @click.option('--password', prompt=True, hide_input=True, confirmation_prompt=True,
-              help='Password for the admin user.')
+            help='管理者ユーザーのパスワード.')
 @with_appcontext
 def init_admin_user(username, email, password):
-    """Create an initial admin user."""
-    admin_role = Role.query.filter_by(name='admin').first()
+    """初期管理者ユーザーを作成します。"""
+    admin_role = security.datastore.find_role('admin')
     if not admin_role:
-        click.echo("Admin role not found. Please run 'flask init roles' first.", err=True)
+        click.echo(
+            "Adminロールが見つかりません。先に 'flask init roles' を実行してください。",
+            err=True
+        )
         return
 
-    if User.query.filter_by(username=username).first():
-        click.echo(f"User '{username}' already exists. Skipping creation.", err=True)
+    if security.datastore.find_user(email=email):
+        click.echo(f"ユーザー '{email}' は既に存在します。作成をスキップします。", err=True)
         return
+    
+    hashed_password = hash_password(password)
 
     try:
-        hashed_password = generate_password_hash(password)
-        admin_user = User(
+        security.datastore.create_user(
             username=username,
             email=email,
-            password_hash=hashed_password,
-            role_id=admin_role.id # admin_role.id を直接設定
+            password_hash=hashed_password,  # 生パスワードを渡すと自動でハッシュ化
+            active=True,
+            roles=[admin_role]
         )
-        db.session.add(admin_user)
         db.session.commit()
-        click.echo(f"Admin user '{username}' created with email '{email}'.")
+        click.echo(f"管理者ユーザー '{username}' (メール: '{email}') が正常に作成されました。")
     except Exception as e:
         db.session.rollback()
-        click.echo(f"Error creating admin user: {e}", err=True)
-        click.echo("Please ensure roles are initialized and try again.", err=True)
+        click.echo(f"管理者ユーザーの作成中にエラーが発生しました: {e}", err=True)
+        click.echo("データベースのロールバックが実行されました。", err=True)
 
-# --- オプション: 全ての初期化を一括で行うコマンド ---
-@init.command("all")
+
+@init.command("reset-db")
+@click.option('--drop-db', is_flag=True, help='既存のデータベースを削除してから作成します。')
+@click.option('--create-admin', is_flag=True, help='データベース作成後、管理者ユーザーを作成します。')
+@click.option('--create-roles', is_flag=True, default=True, help='データベース作成後、デフォルトロールを作成します。')
 @with_appcontext
-def init_all():
-    """Create all initial data (roles, admin user)."""
-    click.echo("Running all initial data setup...")
+@click.pass_context
+def reset_db(ctx, drop_db, create_admin, create_roles):
+    """データベースを再作成し、オプションで初期データ（ロール、管理者ユーザー）を設定します。"""
+    db_path = db.engine.url.database
 
-    # ロールを初期化
-    click.invoke(init_roles)
+    if drop_db:
+        if os.path.exists(db_path):
+            click.echo(f"既存のデータベースを削除中: {db_path}")
+            os.remove(db_path)
+        else:
+            click.echo(f"データベースファイルが見つかりません: {db_path}。削除をスキップします。")
 
-    # 管理者ユーザーを初期化 (パスワードは対話形式で入力)
-    click.echo("Creating admin user...")
-    # ここで admin-user コマンドを呼び出すが、パスワードは対話形式で入力させる
-    # click.invoke はオプションの値を渡すことができる
-    # プロンプトを強制するには click.prompt を使う
-    admin_username = click.prompt("Enter admin username", default='admin')
-    admin_email = click.prompt("Enter admin email", default='admin@example.com')
-    admin_password = click.prompt("Enter admin password", hide_input=True, confirmation_prompt=True)
+    click.echo("データベーステーブルを作成中...")
+    db.create_all()
 
-    # generate_password_hash を直接使用
-    admin_role = Role.query.filter_by(name='admin').first()
-    if not admin_role:
-        click.echo("Admin role not found. Cannot create admin user. Please run 'flask init roles' first if you skipped it.", err=True)
-        return
+    if create_roles:
+        click.echo("デフォルトロールを作成中...")
+        ctx.invoke(init_roles)
 
-    if User.query.filter_by(username=admin_username).first():
-        click.echo(f"User '{admin_username}' already exists. Skipping admin user creation.", err=True)
-    else:
-        try:
-            hashed_password = generate_password_hash(admin_password)
-            admin_user = User(
-                username=admin_username,
-                email=admin_email,
-                password_hash=hashed_password,
-                role_id=admin_role.id
-            )
-            db.session.add(admin_user)
-            db.session.commit()
-            click.echo(f"Admin user '{admin_username}' created successfully.")
-        except Exception as e:
-            db.session.rollback()
-            click.echo(f"Error creating admin user: {e}", err=True)
-            click.echo("Database rollback performed.", err=True)
+    if create_admin:
+        click.echo("管理者ユーザーを作成中...")
+        admin_username = click.prompt("管理者ユーザーのユーザー名を入力", default='admin')
+        admin_email = click.prompt("管理者ユーザーのメールアドレスを入力", default='admin@example.com')
+        admin_password = click.prompt("管理者ユーザーのパスワードを入力", hide_input=True, confirmation_prompt=True)
+        ctx.invoke(init_admin_user, username=admin_username, email=admin_email, password=admin_password)
 
-    click.echo("Initial data setup complete.")
+    click.echo("データベースと初期設定が完了しました。")
+
+
+@init.command("all")
+@click.option('--drop-db', is_flag=True, help='既存のデータベースを削除してから作成します。')
+@with_appcontext
+@click.pass_context
+def init_all(ctx, drop_db):
+    """全ての初期データ（ロール、管理者ユーザー）を設定します。"""
+    click.echo("全ての初期データ設定を実行中...")
+    ctx.invoke(reset_db, drop_db=drop_db, create_roles=True, create_admin=True)
+    click.echo("全ての初期データ設定が完了しました。")

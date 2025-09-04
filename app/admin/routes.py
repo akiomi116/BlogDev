@@ -9,7 +9,7 @@ from werkzeug.utils import secure_filename
 from PIL import Image as PilImage 
 from werkzeug.security import generate_password_hash 
 
-from flask import Blueprint, render_template, redirect, url_for, flash, request, current_app, jsonify, abort 
+from flask import Blueprint, render_template, redirect, url_for,  request, current_app, jsonify, abort ,flash
 from flask_login import login_required, current_user
 from app.models import Post, Comment, Category, Tag, Image, User, Role 
 from app.extensions import db
@@ -18,8 +18,24 @@ from wtforms.validators import Optional, DataRequired
 from flask_wtf.file import FileAllowed 
 
 from app.decorators import roles_required
+from flask_security import roles_required
 
 from . import bp
+
+# from . import blog_admin_bp
+from app import db
+
+from werkzeug.utils import secure_filename
+from PIL import Image as PilImage # Python Imaging Library 用
+
+import re
+
+# ファイルの許可された拡張子をチェックするヘルパー関数
+def allowed_file(filename):
+    return '.' in filename and \
+        filename.rsplit('.', 1)[1].lower() in current_app.config['ALLOWED_EXTENSIONS']
+
+
 
 @bp.route('/show-routes')
 def show_routes():
@@ -39,7 +55,7 @@ def show_routes():
     
     return "<pre>" + "\n".join(output) + "</pre>"
 
-import re
+
 
 def slugify(text):
     text = text.lower()
@@ -51,9 +67,13 @@ def slugify(text):
 # --- 管理ダッシュボードのルート ---
 @bp.route('/')
 @bp.route('/index')
-@login_required
-@roles_required(['admin', 'editor', 'poster']) 
+# @login_required
+# @roles_required('admin', 'editor', 'poster') 
 def index():
+    # ここにデバッグ用のprint文を追加
+    print(f"DEBUG (admin.index): current_user.is_authenticated = {current_user.is_authenticated}")
+    print(f"DEBUG (admin.index): current_user.email = {current_user.email if current_user.is_authenticated else 'Not authenticated'}")
+
     # 管理ダッシュボードの概要情報を取得
     total_posts = Post.query.count()
     published_posts = Post.query.filter_by(is_published=True).count()
@@ -61,24 +81,24 @@ def index():
     total_users = User.query.count()
     
     return render_template('admin/index.html', 
-                           title='管理ダッシュボード',
-                           total_posts=total_posts,
-                           published_posts=published_posts,
-                           total_comments=total_comments,
-                           total_users=total_users)
+                        title='管理ダッシュボード',
+                        total_posts=total_posts,
+                        published_posts=published_posts,
+                        total_comments=total_comments,
+                        total_users=total_users)
 
 # ヘルパー関数: 許可されたファイル拡張子かどうかをチェック
 def allowed_file(filename):
     # ファイル名に拡張子があるか確認し、許可された拡張子リストに含まれているかチェック
     # rsplit('.', 1)[1] で拡張子部分を正確に取得
     return '.' in filename and \
-           filename.rsplit('.', 1)[1].lower() in current_app.config['ALLOWED_EXTENSIONS']
+        filename.rsplit('.', 1)[1].lower() in current_app.config['ALLOWED_EXTENSIONS']
 
 # --- 投稿管理 ---
 
 @bp.route('/posts')
 @login_required
-@roles_required(['admin', 'editor', 'poster'])
+@roles_required('admin', 'editor', 'poster')
 def list_posts():
     if current_user.has_role('admin'):
         posts = Post.query.order_by(Post.created_at.desc()).all()
@@ -92,110 +112,168 @@ def list_posts():
 
 @bp.route('/posts/new', methods=['GET', 'POST'])
 @login_required
-@roles_required(['admin', 'editor', 'poster'])
+@roles_required('admin', 'editor', 'poster')
 def new_post():
-    # POSTリクエストの場合、フォームデータを事前に処理する
-    if request.method == 'POST':
-        form_data = request.form.copy()
-        # JavaScript側から送られてくる'selected_image_id'をフォームが期待する'main_image'にマッピングする
-        if 'selected_image_id' in form_data and form_data['selected_image_id']:
-            form_data['main_image'] = form_data['selected_image_id']
-        form = PostForm(form_data)
-    else:
-        form = PostForm()
+    # フォームの初期化
+    # POSTリクエストの場合、request.form と request.files を自動的に処理します
+    form = PostForm() 
 
-    # GETとPOSTの両方で選択肢を動的に設定
+    # カテゴリの選択肢を動的に設定
     form.category.choices = [(str(c.id), c.name) for c in Category.query.all()]
-    # app/forms.pyのPostFormではtagsはQuerySelectMultipleFieldなので、この設定は不要かもしれないが、
-    # 既存のコードとの一貫性のために残す。もし不要なら削除する。
-    # form.tags.choices = [(t.id, t.name) for t in Tag.query.order_by(Tag.name).all()]
 
-    if form.validate_on_submit():
-        main_image_file = form.main_image_file.data
-        # QuerySelectFieldから返されるのはImageオブジェクトそのもの
-        selected_main_image_obj = form.main_image.data
+    if request.method == 'POST':
+        # デバッグログの出力 (current_app.logger を使用)
+        current_app.logger.debug("\n--- DEBUG: POST Request Received ---")
+        current_app.logger.debug(f"DEBUG: request.files: {request.files}")
 
-        main_image_obj = None
+        # main_image_file がリクエストに含まれているかチェック
+        if 'main_image_file' in request.files:
+            file_storage = request.files['main_image_file']
+            current_app.logger.debug(f"DEBUG: main_image_file from request.files:")
+            current_app.logger.debug(f" Filename: {file_storage.filename}")
+            current_app.logger.debug(f" MIME Type: {file_storage.mimetype}")
+            current_app.logger.debug(f" Content Length (from header): {file_storage.content_length} bytes")
 
-        # 新しい画像がアップロードされた場合
-        if main_image_file and main_image_file.filename and allowed_file(main_image_file.filename):
-            # ... (画像アップロード処理は変更なし) ...
-            original_filename = secure_filename(main_image_file.filename)
-            unique_filename = str(uuid.uuid4()) + os.path.splitext(original_filename)[1]
-            thumbnail_filename = 'thumb_' + unique_filename
-            filepath_abs = os.path.join(current_app.config['UPLOAD_IMAGES_DIR'], unique_filename)
-            thumbnail_filepath_abs = os.path.join(current_app.config['UPLOAD_THUMBNAILS_DIR'], thumbnail_filename)
-            filepath_rel = os.path.join(current_app.config['UPLOAD_FOLDER_RELATIVE_PATH'], unique_filename).replace('\\', '/')
-            thumbnail_filepath_rel = os.path.join(current_app.config['THUMBNAIL_FOLDER_RELATIVE_PATH'], thumbnail_filename).replace('\\', '/')
-
+            # ★★★最も重要な修正点: FileStorageストリームのポインタを先頭に戻す★★★
+            # これをしないと、WTFormsがform.main_image_file.dataをバインドする際に
+            # ストリームが既に読み尽くされているため、Noneになってしまう可能性があります。
             try:
-                main_image_file.save(filepath_abs)
-                img = PilImage.open(filepath_abs)
-                img.thumbnail(current_app.config['THUMBNAIL_SIZE'])
-                img.save(thumbnail_filepath_abs)
-                main_image_obj = Image(
-                    original_filename=original_filename,
-                    unique_filename=unique_filename,
-                    thumbnail_filename=thumbnail_filename,
-                    mimetype=main_image_file.mimetype,
-                    filepath=filepath_rel,
-                    thumbnail_filepath=thumbnail_filepath_rel,
-                    user_id=current_user.id,
-                    alt_text=form.main_image_alt_text.data
-                )
-                db.session.add(main_image_obj)
-                db.session.flush() # IDを取得するためにflush
+                # Werkzeug の FileStorage オブジェクトの stream を使ってポインタを戻す
+                file_storage.stream.seek(0) 
+                current_app.logger.debug("DEBUG: file_storage.stream.seek(0) called.")
+                # デバッグのために実際のサイズを再確認する (メモリ消費に注意)
+                actual_stream_length = len(file_storage.stream.read())
+                file_storage.stream.seek(0) # 再度先頭に戻す for WTForms
+                current_app.logger.debug(f"DEBUG: Actual file content length (stream read): {actual_stream_length} bytes")
+                
+                if actual_stream_length == 0 and file_storage.filename: # ファイルが選択されているのに内容が0の場合
+                    current_app.logger.error("ERROR: File content is empty after stream read, but filename exists.")
+                    flash('アップロードされたファイルが空です。再度お試しください。', 'danger')
+                    return render_template('posts/new_post.html', form=form, title='新規投稿', is_edit=False)
+
             except Exception as e:
-                current_app.logger.error(f"Image processing error: {e}", exc_info=True)
-                flash('画像の処理中にエラーが発生しました。', 'danger')
-                return render_template('posts/edit_post.html', form=form, title='新規投稿', is_edit=False)
+                current_app.logger.error(f"Error seeking/reading file stream for debug: {e}", exc_info=True)
+                flash('ファイルの読み取り中にエラーが発生しました。', 'danger')
+                return render_template('posts/new_post.html', form=form, title='新規投稿', is_edit=False)
+        else:
+            current_app.logger.debug("DEBUG: 'main_image_file' not in request.files (no file uploaded).")
 
-        # 既存の画像が選択された場合
-        elif selected_main_image_obj:
-            main_image_obj = selected_main_image_obj
-            if form.main_image_alt_text.data:
-                main_image_obj.alt_text = form.main_image_alt_text.data
-
-        # メイン画像が最終的に確定しているかチェック (バリデーションを通過しているので基本的には大丈夫なはず)
-        if main_image_obj is None:
-            flash('メイン画像の処理でエラーが発生しました。もう一度お試しください。', 'danger')
-            return render_template('posts/edit_post.html', form=form, title='新規投稿', is_edit=False)
-
-        category = None
-        if form.category.data:
-            category = db.session.get(Category, form.category.data)
-
-        new_post = Post(
-            title=form.title.data,
-            body=form.body.data,
-            posted_by=current_user,
-            category=category,
-            is_published=form.is_published.data,
-            main_image=main_image_obj
-        )
-        db.session.add(new_post)
+        current_app.logger.debug(f"DEBUG: request.form: {request.form}")
+        current_app.logger.debug(f"--- DEBUG End ---")
         
-        # タグと追加画像はPostオブジェクトがDBに追加された後に設定
-        if form.tags.data:
-            new_post.tags = form.tags.data
-        if form.additional_images.data:
-            new_post.additional_images = form.additional_images.data
+        # form.validate_on_submit() は、request.form と request.files を使ってフォームをバリデート
+        # 上記で file_storage.stream.seek(0) を行っていれば、form.main_image_file.data は適切にバインドされるはず
+        if form.validate_on_submit():
+            current_app.logger.debug(f"DEBUG: Form validation successful.")
+            current_app.logger.debug(f"DEBUG: form.main_image_file.data type: {type(form.main_image_file.data)}")
+            if form.main_image_file.data:
+                current_app.logger.debug(f"DEBUG: form.main_image_file.data.filename: {form.main_image_file.data.filename}")
+            current_app.logger.debug(f"DEBUG: form.main_image.data: {form.main_image.data}") # QuerySelectFieldのデータ (ImageオブジェクトまたはNone)
 
-        db.session.commit()
-        flash('新しい投稿が作成されました。', 'success')
-        return redirect(url_for('blog_admin_bp.list_posts'))
+            main_image_obj = None
+
+            # 1. 新しい画像がアップロードされた場合を優先
+            if form.main_image_file.data and form.main_image_file.data.filename:
+                main_image_file = form.main_image_file.data
+                
+                if not allowed_file(main_image_file.filename):
+                    flash('許可されていないファイル形式です。', 'danger')
+                    return render_template('posts/new_post.html', form=form, title='新規投稿', is_edit=False)
+
+                original_filename = secure_filename(main_image_file.filename)
+                unique_filename = str(uuid.uuid4()) + os.path.splitext(original_filename)[1]
+                thumbnail_filename = 'thumb_' + unique_filename
+                
+                filepath_abs = os.path.join(current_app.config['UPLOAD_IMAGES_DIR'], unique_filename)
+                thumbnail_filepath_abs = os.path.join(current_app.config['UPLOAD_THUMBNAILS_DIR'], thumbnail_filename)
+                
+                filepath_rel = os.path.join(current_app.config['UPLOAD_FOLDER_RELATIVE_PATH'], unique_filename).replace('\\', '/')
+                thumbnail_filepath_rel = os.path.join(current_app.config['THUMBNAIL_FOLDER_RELATIVE_PATH'], thumbnail_filename).replace('\\', '/')
+
+                try:
+                    # ここでファイルの保存が行われます。
+                    # form.main_image_file.data (FileStorageオブジェクト) は、
+                    # 既にストリームが先頭に戻されているため、正しく保存できるはずです。
+                    main_image_file.save(filepath_abs) 
+                    
+                    # サムネイル生成
+                    img = PilImage.open(filepath_abs)
+                    img.thumbnail(current_app.config['THUMBNAIL_SIZE'])
+                    img.save(thumbnail_filepath_abs)
+                    
+                    main_image_obj = Image(
+                        original_filename=original_filename,
+                        unique_filename=unique_filename,
+                        thumbnail_filename=thumbnail_filename,
+                        mimetype=main_image_file.mimetype,
+                        filepath=filepath_rel,
+                        thumbnail_filepath=thumbnail_filepath_rel,
+                        user_id=current_user.id,
+                        alt_text=form.main_image_alt_text.data
+                    )
+                    db.session.add(main_image_obj)
+                    db.session.flush() # IDを取得するためにflush
+                    current_app.logger.info(f"New image uploaded and saved: {unique_filename}")
+                except Exception as e:
+                    current_app.logger.error(f"Image processing error: {e}", exc_info=True)
+                    flash('画像の処理中にエラーが発生しました。', 'danger')
+                    return render_template('posts/new_post.html', form=form, title='新規投稿', is_edit=False)
+
+            # 2. 既存の画像がギャラリーから選択された場合 (form.main_image.data が Image オブジェクトの場合)
+            elif form.main_image.data: # main_image は QuerySelectField で Image オブジェクトが直接入る
+                main_image_obj = form.main_image.data 
+                
+                if form.main_image_alt_text.data and form.main_image_alt_text.data != main_image_obj.alt_text:
+                    main_image_obj.alt_text = form.main_image_alt_text.data
+                    db.session.add(main_image_obj) # 変更を追跡させる
+                
+                current_app.logger.info(f"Existing image selected from gallery: {main_image_obj.unique_filename}")
+
+            # この時点では、main_image_obj が None であれば、フォームバリデーションが失敗しているはず。
+            # ただし、念のため最終チェックとして残しておいても良い。
+            if main_image_obj is None:
+                flash('メイン画像をアップロードするか、ギャラリーから選択してください。', 'danger')
+                return render_template('posts/new_post.html', form=form, title='新規投稿', is_edit=False)
+
+            # 投稿作成処理
+            category = None
+            if form.category.data:
+                category = db.session.get(Category, form.category.data) # QuerySelectFieldではないため、IDで取得
+
+            new_post = Post(
+                title=form.title.data,
+                body=form.body.data,
+                posted_by=current_user,
+                category=category,
+                is_published=form.is_published.data,
+                main_image=main_image_obj 
+            )
+            db.session.add(new_post)
+            
+            if form.tags.data:
+                new_post.tags = form.tags.data
+            
+            if form.additional_images.data: # QuerySelectMultipleFieldなので、Imageオブジェクトのリストが返る
+                new_post.additional_images = form.additional_images.data
+
+            db.session.commit()
+            flash('新しい投稿が作成されました。', 'success')
+            return redirect(url_for('blog_admin_bp.list_posts'))
+        
+        # バリデーション失敗時 (POSTメソッドの場合)
+        else: 
+            current_app.logger.warning(f"Post form validation failed: {form.errors}")
+            current_app.logger.debug(f"Form validation errors: {form.errors}")
+            current_app.logger.debug(f"form.main_image_file.data (on validation failure): {form.main_image_file.data}")
+            current_app.logger.debug(f"form.main_image.data (on validation failure): {form.main_image.data}")
     
-    # バリデーション失敗時
-    elif request.method == 'POST':
-        # エラー内容をログに出力
-        current_app.logger.warning(f"Post form validation failed: {form.errors}")
-
-    return render_template('posts/edit_post.html', form=form, title='新規投稿', is_edit=False)
+    # GETリクエストの場合、またはPOSTリクエストでバリデーション失敗した場合
+    return render_template('posts/new_post.html', form=form, title='新規投稿', is_edit=False)
 
 
 @bp.route('/posts/edit/<uuid:post_id>', methods=['GET', 'POST'])
 @login_required
-@roles_required(['admin', 'editor', 'poster'])
+@roles_required('admin', 'editor', 'poster')
 def edit_post(post_id):
     post = db.session.get(Post, post_id)
     if post is None:
@@ -338,7 +416,7 @@ def edit_post(post_id):
 
 @bp.route('/posts/delete/<uuid:post_id>', methods=['POST'])
 @login_required
-@roles_required(['admin', 'editor']) 
+@roles_required('admin', 'editor') 
 def delete_post(post_id):
     post_to_delete = db.session.get(Post, post_id)
     if not post_to_delete:
@@ -364,7 +442,7 @@ def delete_post(post_id):
 # --- カテゴリ管理 ---
 @bp.route('/categories')
 @login_required
-@roles_required(['admin', 'editor'])
+@roles_required('admin', 'editor')
 def list_categories():
     categories = Category.query.order_by(Category.name).all()
     csrf_form = DeleteForm()
@@ -372,7 +450,7 @@ def list_categories():
 
 @bp.route('/categories/add', methods=['GET', 'POST'])
 @login_required
-@roles_required(['admin', 'editor'])
+@roles_required('admin', 'editor')
 def add_category():
     from app.forms import CategoryForm 
     form = CategoryForm()
@@ -393,7 +471,7 @@ def add_category():
 
 @bp.route('/categories/edit/<uuid:category_id>', methods=['GET', 'POST'])
 @login_required
-@roles_required(['admin', 'editor'])
+@roles_required('admin', 'editor')
 def edit_category(category_id):
     from app.forms import CategoryForm 
     category = db.session.get(Category, category_id)
@@ -411,7 +489,7 @@ def edit_category(category_id):
 
 @bp.route('/categories/delete/<uuid:category_id>', methods=['POST'])
 @login_required
-@roles_required(['admin', 'editor'])
+@roles_required('admin', 'editor')
 def delete_category(category_id):
     category_to_delete = db.session.get(Category, category_id)
     if not category_to_delete:
@@ -434,7 +512,7 @@ def delete_category(category_id):
 # --- タグ管理 ---
 @bp.route('/tags')
 @login_required
-@roles_required(['admin', 'editor'])
+@roles_required('admin', 'editor')
 def list_tags():
     tags = Tag.query.order_by(Tag.name).all()
     csrf_form = DeleteForm()
@@ -442,7 +520,7 @@ def list_tags():
 
 @bp.route('/tags/add', methods=['GET', 'POST'])
 @login_required
-@roles_required(['admin', 'editor'])
+@roles_required('admin', 'editor')
 def add_tag():
     from app.forms import TagForm 
     form = TagForm()
@@ -456,7 +534,7 @@ def add_tag():
 
 @bp.route('/tags/edit/<uuid:tag_id>', methods=['GET', 'POST'])
 @login_required
-@roles_required(['admin', 'editor'])
+@roles_required('admin', 'editor')
 def edit_tag(tag_id):
     from app.forms import TagForm 
     tag = db.session.get(Tag, tag_id)
@@ -474,7 +552,7 @@ def edit_tag(tag_id):
 
 @bp.route('/tags/delete/<uuid:tag_id>', methods=['POST'])
 @login_required
-@roles_required(['admin', 'editor'])
+@roles_required('admin', 'editor')
 def delete_tag(tag_id):
     tag_to_delete = db.session.get(Tag, tag_id)
     if not tag_to_delete:
@@ -522,7 +600,7 @@ def get_images_json():
 
 @bp.route('/images')
 @login_required
-@roles_required(['admin', 'editor', 'poster'])
+@roles_required('admin', 'editor', 'poster')
 def list_images():
     if current_user.has_role('admin'):
         images = Image.query.order_by(Image.uploaded_at.desc()).all()
@@ -532,7 +610,7 @@ def list_images():
 
 @bp.route('/images/upload', methods=['GET', 'POST'])
 @login_required
-@roles_required(['admin', 'editor', 'poster'])
+@roles_required('admin', 'editor', 'poster')
 def upload_image():
     form = ImageUploadForm()
     if form.validate_on_submit():
@@ -580,7 +658,7 @@ def upload_image():
 
 @bp.route('/images/bulk_upload', methods=['GET', 'POST'])
 @login_required
-@roles_required(['admin', 'editor', 'poster'])
+@roles_required('admin', 'editor', 'poster')
 def bulk_upload_images():
     form = BulkImageUploadForm()
     if form.validate_on_submit():
@@ -639,7 +717,7 @@ def bulk_upload_images():
 
 @bp.route('/images/edit/<uuid:image_id>', methods=['GET', 'POST'])
 @login_required
-@roles_required(['admin', 'editor', 'poster'])
+@roles_required('admin', 'editor', 'poster')
 def edit_image(image_id):
     image = db.session.get(Image, image_id)
     if image is None:
@@ -667,7 +745,7 @@ def edit_image(image_id):
 
 @bp.route('/images/delete/<uuid:image_id>', methods=['POST'])
 @login_required
-@roles_required(['admin', 'editor', 'poster'])
+@roles_required('admin', 'editor', 'poster')
 def delete_image(image_id):
     image_to_delete = db.session.get(Image, image_id)
     if not image_to_delete:

@@ -42,6 +42,11 @@ class Role(db.Model):
     def __repr__(self):
         return f'<Role {self.name}>'
 
+roles_users = db.Table(
+    'roles_users',
+    db.Column('user_id', UUIDType(binary=False), db.ForeignKey('user.id'), primary_key=True),
+    db.Column('role_id', db.Integer, db.ForeignKey('role.id'), primary_key=True)
+)
 class User(UserMixin, db.Model):
     """
     アプリケーションのユーザーを表し、認証と、ユーザーが作成したコンテンツ
@@ -52,18 +57,28 @@ class User(UserMixin, db.Model):
     username = db.Column(db.String(64), unique=True, nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(256), nullable=False)
+    fs_uniquifier = db.Column(db.String(255), unique=True, nullable=False)
+    active = db.Column(db.Boolean(), default=True) # デフォルトでTrueに設定することが重要
     
-    role_id = db.Column(db.Integer, db.ForeignKey('role.id'), nullable=True)
-
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(pytz.utc), nullable=False)
     updated_at = db.Column(db.DateTime, default=lambda: datetime.now(pytz.utc), onupdate=lambda: datetime.now(pytz.utc), nullable=False)
 
-    role = relationship('Role', backref=db.backref('users', lazy='dynamic'))
+    roles = db.relationship('Role', secondary=roles_users, backref=db.backref('users', lazy='dynamic'))
+    # role = relationship('Role', backref=db.backref('users', lazy='dynamic'))
+    
     posts = relationship('Post', back_populates='posted_by', lazy='dynamic', cascade='all, delete-orphan')
     categories = relationship('Category', backref='user', lazy='dynamic', cascade='all, delete-orphan')
     tags = relationship('Tag', backref='user', lazy='dynamic', cascade='all, delete-orphan')
     uploaded_images = relationship('Image', back_populates='uploader', lazy='dynamic', cascade='all, delete-orphan')
     comments = relationship('Comment', back_populates='comment_author', lazy='dynamic', cascade='all, delete-orphan')
+
+    def __init__(self, *args, **kwargs):
+        """
+        新しいUserインスタンスが作成されるときに、fs_uniquifierを自動的に生成します。
+        """
+        super().__init__(*args, **kwargs)
+        if self.fs_uniquifier is None:
+            self.fs_uniquifier = str(uuid.uuid4())
 
     @property
     def is_admin(self):
@@ -73,7 +88,7 @@ class User(UserMixin, db.Model):
     @property
     def is_editor(self):
         """ユーザーが'Editor'ロールを持っているかチェックするプロパティ"""
-        return self.has_role('poster')
+        return self.has_role('poster') # ここは'poster'で正しいですか？'editor'の方が自然かもしれません
 
     def __repr__(self):
         return f'<User {self.username}>'
@@ -106,7 +121,7 @@ class Category(db.Model):
     user_id = db.Column(UUIDType(binary=False), db.ForeignKey('user.id'), nullable=False)
 
     __table_args__ = (UniqueConstraint('name', 'user_id', name='_category_name_user_id_uc'),
-                      UniqueConstraint('slug', 'user_id', name='_category_slug_user_id_uc'))
+                    UniqueConstraint('slug', 'user_id', name='_category_slug_user_id_uc'))
     
     posts = relationship('Post', back_populates='category', lazy='dynamic')
 
@@ -130,7 +145,7 @@ class Tag(db.Model):
     user_id = db.Column(UUIDType(binary=False), db.ForeignKey('user.id'), nullable=False)
 
     __table_args__ = (UniqueConstraint('name', 'user_id', name='_tag_name_user_id_uc'),
-                      UniqueConstraint('slug', 'user_id', name='_tag_slug_user_id_uc'))
+                    UniqueConstraint('slug', 'user_id', name='_tag_slug_user_id_uc'))
 
     def __repr__(self):
         return f'<Tag {self.name}>'

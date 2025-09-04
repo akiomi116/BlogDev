@@ -6,8 +6,43 @@ BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 
 class Config:
     # アプリケーションのセキュリティキー (セッション管理などに使用)
-    SECRET_KEY = os.urandom(24).hex()
+    
+    # 良い例1: 環境変数から取得する (本番環境推奨)
+    # 環境変数に SECRET_KEY="ここにランダムで長い固定の文字列" を設定しておく必要があります。
+    # 例: PowerShellなら $env:SECRET_KEY = "your_secret_key_here"
+    # SECRET_KEY = os.environ.get('SECRET_KEY')
 
+    # 良い例2: デバッグ/開発用に、コード内に固定の文字列を直接書く (本番環境では非推奨)
+    # 非常に長く、推測されにくい文字列にしてください。
+    
+    SECRET_KEY = 'TEST_SECRET_KEY'
+
+    SESSION_COOKIE_SAMESITE = "None"
+    SESSION_COOKIE_SECURE = False 
+
+    # SECURITY_REGISTERABLE = True # ユーザー登録を許可する場合
+    # SECURITY_CONFIRMABLE = False # ユーザー確認メールを必須にしない場合
+    # SECURITY_TRACKABLE = True # ユーザーログイン/ログアウト追跡
+
+    # Flask-Security-Too の認証関連設定
+    # Flask-Security-Too のデバッグログを有効にする
+    SECURITY_TRACKABLE = True # ユーザーのログイン/ログアウトを追跡
+    SECURITY_PASSWORD_SALT = 'a_random_salt_for_password_hashing' # パスワードソルトも設定
+
+    # 明示的なURL設定 (デフォルトで通常は不要ですが、念のため確認)
+    SECURITY_URL_PREFIX = "/security" # デフォルト
+    SECURITY_LOGIN_URL = "/login"     # デフォルト
+    SECURITY_LOGOUT_URL = "/logout"   # デフォルト
+    SECURITY_POST_LOGIN_VIEW = "/index" # ログイン後のリダイレクト先
+    SECURITY_POST_LOGOUT_VIEW = "/"   # ログアウト後のリダイレクト先
+    SECURITY_UNAUTHORIZED_VIEW = "/login" # 認証されていない場合のビュー
+
+    # セッション関連のデバッグ
+    SECURITY_FLASH_MESSAGES = True # Flashメッセージを有効にする（エラー表示のため）
+    # SESSION_COOKIE_SAMESITE = "None" # config.pyで既に設定済み
+    # SESSION_COOKIE_SECURE = False   # config.pyで既に設定済み
+    
+  
     # データベースのURI設定
     # SQLiteデータベースファイルが 'instance' フォルダ内に作成されます
     SQLALCHEMY_DATABASE_URI = 'sqlite:///' + os.path.join(BASE_DIR, 'instance', 'akiomi.db')
