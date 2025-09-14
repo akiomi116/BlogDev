@@ -98,7 +98,8 @@ class PostForm(FlaskForm):
     body = TextAreaField('本文', validators=[DataRequired()])
 
     # ギャラリーから選択された画像のIDを保持する HiddenField
-    selected_image_id = HiddenField('選択された画像ID')
+    main_image_upload = FileField('メイン画像アップロード', validators=[FileAllowed(['jpg', 'png', 'jpeg', 'gif'], '画像ファイルのみ')])
+    selected_image_id = HiddenField('選択画像ID')
     
     main_image_file = FileField('新しいメイン画像をアップロード (任意)', validators=[
         FileAllowed(['jpg', 'png', 'jpeg', 'gif', 'webp'], '画像ファイル (JPG, PNG, JPEG, GIF, WEBP) のみアップロード可能です！'),
@@ -141,17 +142,13 @@ class PostForm(FlaskForm):
         self.main_image.choices = [('', 'なし')] + [(str(img.id), img.unique_filename) for img in images]
         self.additional_images.choices = [(str(img.id), img.unique_filename) for img in images]
 
-    def validate(self, extra_validators=None):
-        rv = super(PostForm, self).validate(extra_validators=extra_validators)
+    def validate(self):
+        rv = FlaskForm.validate(self)
         if not rv:
             return False
-        
-        # 新規投稿の場合(self.obj is None)、メイン画像は必須
-        if not self.obj:
-            if not self.main_image_file.data and not self.main_image.data:
-                msg = 'メイン画像は必須です。ファイルをアップロードするか、ギャラリーから選択してください。'
-                self.main_image_file.errors.append(msg)
-                return False
+        if not self.main_image_upload.data and not self.selected_image_id.data:
+            self.main_image_upload.errors.append('メイン画像は必須です。ファイルをアップロードするか、ギャラリーから選択してください。')
+            return False
         return True
 
 

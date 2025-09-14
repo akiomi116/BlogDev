@@ -115,3 +115,26 @@ def init_all(ctx, drop_db):
     click.echo("全ての初期データ設定を実行中...")
     ctx.invoke(reset_db, drop_db=drop_db, create_roles=True, create_admin=True)
     click.echo("全ての初期データ設定が完了しました。")
+
+@init.command("assign-admin-role")
+@click.argument('email')
+@with_appcontext
+def assign_admin_role(email):
+    """指定されたメールアドレスのユーザーに管理者ロールを付与します。"""
+    admin_role = Role.query.filter_by(name='admin').first()
+    if not admin_role:
+        click.echo("Admin role not found. Please run 'flask init roles' first.", err=True)
+        return
+
+    user = User.query.filter_by(email=email).first()
+    if not user:
+        click.echo(f"User with email '{email}' not found.", err=True)
+        return
+
+    if admin_role in user.roles:
+        click.echo(f"User '{email}' already has the admin role.")
+        return
+
+    user.roles.append(admin_role)
+    db.session.commit()
+    click.echo(f"Successfully assigned admin role to '{email}'.")

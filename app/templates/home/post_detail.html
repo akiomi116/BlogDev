@@ -82,7 +82,7 @@
                         </form>
                     {% else %}
                         <div class="alert alert-info mt-4" role="alert">
-                            コメントを投稿するには <a href="{{ url_for('auth.login', next=request.path) }}" class="alert-link">ログイン</a> が必要です。
+                            コメントを投稿するには <a href="{{ url_for('security.login', next=request.path) }}" class="alert-link">ログイン</a> が必要です。
                         </div>
                     {% endif %}
                     {# ★★★ コメントフォームの表示制御の修正終わり ★★★ #}

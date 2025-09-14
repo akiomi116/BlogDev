@@ -18,8 +18,6 @@ home_bp = Blueprint('home', __name__)
 @home_bp.route('/')
 @home_bp.route('/index')
 def index():
-    print(f"DEBUG (home.index): current_user.is_authenticated = {current_user.is_authenticated}")
-    print(f"DEBUG (home.index): current_user.email = {current_user.email if current_user.is_authenticated else 'Not authenticated'}")
     
     #logger.debug("DEBUG(home): index route accessed.")
     page = request.args.get('page', 1, type=int)
@@ -64,7 +62,7 @@ def post_detail(post_id):
         if not current_user.is_authenticated:
             flash('コメントを投稿するにはログインが必要です。', 'danger')
             current_app.logger.warning("WARNING: Unauthenticated user attempted to post comment.")
-            return redirect(url_for('auth.login', next=request.url))
+            return redirect(url_for('security.login', next=request.url))
 
         if comment_form.validate_on_submit():
             #current_app.logger.debug("DEBUG: Comment form validation successful.")

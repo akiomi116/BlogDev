@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+
+{% block title %}コメント編集{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1 class="mb-4">コメント編集</h1>
+    <form method="POST" action="{{ url_for('blog_admin_bp.edit_comment', comment_id=comment.id) }}">
+        {{ form.csrf_token }}
+        <div class="mb-3">
+            <label for="body" class="form-label">{{ form.body.label }}</label>
+            <textarea name="body" id="body" class="form-control" rows="10">{{ form.body.data or '' }}</textarea>
+        </div>
+        <div class="mb-3 form-check">
+            <input type="checkbox" name="is_approved" id="is_approved" class="form-check-input" {% if form.is_approved.data %}checked{% endif %}>
+            <label for="is_approved" class="form-check-label">{{ form.is_approved.label }}</label>
+        </div>
+        <input type="submit" value="更新" class="btn btn-primary">
+    </form>
+</div>
+{% endblock %}

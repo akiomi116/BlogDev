@@ -3,7 +3,7 @@
 import os
 import uuid
 from datetime import datetime
-from flask_login import UserMixin
+from flask_security import UserMixin, RoleMixin
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.schema import PrimaryKeyConstraint, UniqueConstraint
 import pytz
@@ -30,7 +30,7 @@ post_additional_images = db.Table(
 )
 
 
-class Role(db.Model):
+class Role(db.Model, RoleMixin):
     """
     アプリケーションにおけるユーザーの役割を表し、権限やアクセスレベルを定義します。
     """
@@ -38,6 +38,7 @@ class Role(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(64), unique=True, nullable=False)
     description = db.Column(db.String(256), nullable=True)
+    permissions = db.Column(db.JSON)
 
     def __repr__(self):
         return f'<Role {self.name}>'
@@ -62,6 +63,13 @@ class User(UserMixin, db.Model):
     
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(pytz.utc), nullable=False)
     updated_at = db.Column(db.DateTime, default=lambda: datetime.now(pytz.utc), onupdate=lambda: datetime.now(pytz.utc), nullable=False)
+
+    # Flask-Security-Too trackable fields
+    last_login_at = db.Column(db.DateTime())
+    current_login_at = db.Column(db.DateTime())
+    last_login_ip = db.Column(db.String(100))
+    current_login_ip = db.Column(db.String(100))
+    login_count = db.Column(db.Integer)
 
     roles = db.relationship('Role', secondary=roles_users, backref=db.backref('users', lazy='dynamic'))
     # role = relationship('Role', backref=db.backref('users', lazy='dynamic'))
@@ -93,6 +101,14 @@ class User(UserMixin, db.Model):
     def __repr__(self):
         return f'<User {self.username}>'
 
+    @property
+    def password(self):
+        return self.password_hash
+
+    @password.setter
+    def password(self, password):
+        self.password_hash = generate_password_hash(password)
+
     def set_password(self, password):
         """与えられたパスワードをハッシュ化して保存します。"""
         self.password_hash = generate_password_hash(password)
@@ -100,10 +116,13 @@ class User(UserMixin, db.Model):
     def check_password(self, password):
         """与えられたパスワードが保存されたハッシュと一致するかを確認します。"""
         return check_password_hash(self.password_hash, password)
+
+    def verify_and_update_password(self, password):
+        return self.check_password(password)
     
     def has_role(self, role_name):
         """指定されたロールを持っているか汎用的にチェックするメソッド"""
-        return self.role is not None and self.role.name == role_name
+        return any(role.name == role_name for role in self.roles)
     
 class Category(db.Model):
     """

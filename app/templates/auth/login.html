@@ -11,31 +11,16 @@
             <div class="card shadow-lg p-4 rounded-4 border-0">
                 <div class="card-body">
                     <h2 class="card-title text-center mb-4 text-primary">ログイン</h2>
-                    <form action="" method="post" novalidate>
-                        {{ form.hidden_tag() }} {# CSRFトークンを隠しフィールドとして追加 #}
-                        <div class="mb-3">
-                            {# ★★★ 修正: form.username.label を form.email.label に変更 ★★★ #}
-                            {{ form.email.label(class="form-label") }}
-                            {# ★★★ 修正: form.username(size=32) を form.email(class="form-control") に変更 ★★★ #}
-                            {{ form.email(class="form-control", placeholder="メールアドレスを入力") }}
-                            {% for error in form.email.errors %}
-                                <div class="text-danger small mt-1">{{ error }}</div>
+                    <form method="post">
+                        {{ form.hidden_tag() }}
+                        <!-- 他のフォームフィールド -->
+                        {% for field in form %}
+                            {{ field.label }} {{ field() }}
+                            {% for error in field.errors %}
+                                <span style="color: red;">{{ error }}</span>
                             {% endfor %}
-                        </div>
-                        <div class="mb-3">
-                            {{ form.password.label(class="form-label") }}
-                            {{ form.password(class="form-control", placeholder="パスワードを入力") }}
-                            {% for error in form.password.errors %}
-                                <div class="text-danger small mt-1">{{ error }}</div>
-                            {% endfor %}
-                        </div>
-                        <div class="mb-3 form-check">
-                            {{ form.remember_me(class="form-check-input") }}
-                            {{ form.remember_me.label(class="form-check-label") }}
-                        </div>
-                        <div class="d-grid gap-2">
-                            {{ form.submit(class="btn btn-primary btn-lg rounded-pill") }}
-                        </div>
+                        {% endfor %}
+                        <button type="submit">ログイン</button>
                     </form>
                     <div class="text-center mt-3">
                         <p class="mb-1"><a href="{{ url_for('auth.reset_password_request') }}" class="text-muted text-decoration-none small">パスワードを忘れましたか？</a></p>

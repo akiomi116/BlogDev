@@ -17,8 +17,9 @@ from app.forms import PostForm, ImageUploadForm, BulkImageUploadForm, DeleteForm
 from wtforms.validators import Optional, DataRequired 
 from flask_wtf.file import FileAllowed 
 
-from app.decorators import roles_required
+
 from flask_security import roles_required
+from flask_principal import Permission, RoleNeed
 
 from . import bp
 
@@ -98,8 +99,13 @@ def allowed_file(filename):
 
 @bp.route('/posts')
 @login_required
-@roles_required('admin', 'editor', 'poster')
 def list_posts():
+    # 手動の権限チェック
+    required_roles = ['admin', 'editor', 'poster']
+    if not any(Permission(RoleNeed(role_name)).can() for role_name in required_roles):
+        flash('アクセス権限がありません。', 'danger')
+        abort(403) # または redirect(url_for('home.index')) など
+
     if current_user.has_role('admin'):
         posts = Post.query.order_by(Post.created_at.desc()).all()
     else:
@@ -112,11 +118,9 @@ def list_posts():
 
 @bp.route('/posts/new', methods=['GET', 'POST'])
 @login_required
-@roles_required('admin', 'editor', 'poster')
 def new_post():
-    # フォームの初期化
-    # POSTリクエストの場合、request.form と request.files を自動的に処理します
-    form = PostForm() 
+    form = PostForm()
+    gallery_images = Image.query.all()  # 必要に応じてフィルタを追加
 
     # カテゴリの選択肢を動的に設定
     form.category.choices = [(str(c.id), c.name) for c in Category.query.all()]
@@ -219,15 +223,22 @@ def new_post():
                     flash('画像の処理中にエラーが発生しました。', 'danger')
                     return render_template('posts/new_post.html', form=form, title='新規投稿', is_edit=False)
 
-            # 2. 既存の画像がギャラリーから選択された場合 (form.main_image.data が Image オブジェクトの場合)
-            elif form.main_image.data: # main_image は QuerySelectField で Image オブジェクトが直接入る
-                main_image_obj = form.main_image.data 
-                
-                if form.main_image_alt_text.data and form.main_image_alt_text.data != main_image_obj.alt_text:
-                    main_image_obj.alt_text = form.main_image_alt_text.data
-                    db.session.add(main_image_obj) # 変更を追跡させる
-                
-                current_app.logger.info(f"Existing image selected from gallery: {main_image_obj.unique_filename}")
+            # 2. 既存の画像がギャラリーから選択された場合 (form.selected_image_id.data が 画像ID の場合)
+            elif form.selected_image_id.data:
+                try:
+                    image_id = uuid.UUID(form.selected_image_id.data)
+                    main_image_obj = db.session.get(Image, image_id)
+                    if main_image_obj:
+                        if form.main_image_alt_text.data and form.main_image_alt_text.data != main_image_obj.alt_text:
+                            main_image_obj.alt_text = form.main_image_alt_text.data
+                            db.session.add(main_image_obj) # 変更を追跡させる
+                        current_app.logger.info(f"Existing image selected from gallery: {main_image_obj.unique_filename}")
+                    else:
+                        flash('選択された画像が見つかりません。', 'danger')
+                        return render_template('posts/new_post.html', form=form, title='新規投稿', is_edit=False)
+                except ValueError:
+                    flash('無効な画像IDです。', 'danger')
+                    return render_template('posts/new_post.html', form=form, title='新規投稿', is_edit=False)
 
             # この時点では、main_image_obj が None であれば、フォームバリデーションが失敗しているはず。
             # ただし、念のため最終チェックとして残しておいても良い。
@@ -268,13 +279,19 @@ def new_post():
             current_app.logger.debug(f"form.main_image.data (on validation failure): {form.main_image.data}")
     
     # GETリクエストの場合、またはPOSTリクエストでバリデーション失敗した場合
-    return render_template('posts/new_post.html', form=form, title='新規投稿', is_edit=False)
+    # 例: ギャラリー画像取得
+    return render_template('posts/new_post.html', form=form, gallery_images=gallery_images, title='新規投稿', is_edit=False)
 
 
 @bp.route('/posts/edit/<uuid:post_id>', methods=['GET', 'POST'])
 @login_required
-@roles_required('admin', 'editor', 'poster')
 def edit_post(post_id):
+    # 手動の権限チェック
+    required_roles = ['admin', 'editor', 'poster']
+    if not any(Permission(RoleNeed(role_name)).can() for role_name in required_roles):
+        flash('アクセス権限がありません。', 'danger')
+        abort(403) # または redirect(url_for('home.index')) など
+
     post = db.session.get(Post, post_id)
     if post is None:
         flash('投稿が見つかりません。', 'danger')
@@ -334,7 +351,12 @@ def edit_post(post_id):
             thumbnail_filepath_rel = os.path.join(current_app.config['THUMBNAIL_FOLDER_RELATIVE_PATH'], thumbnail_filename).replace('\\', '/')
 
             try:
-                main_image_file.save(filepath_abs)
+                # ここでファイルの保存が行われます。
+                # form.main_image_file.data (FileStorageオブジェクト) は、
+                # 既にストリームが先頭に戻されているため、正しく保存できるはずです。
+                main_image_file.save(filepath_abs) 
+                
+                # サムネイル生成
                 img = PilImage.open(filepath_abs)
                 img.thumbnail(current_app.config['THUMBNAIL_SIZE'])
                 img.save(thumbnail_filepath_abs)
@@ -352,7 +374,7 @@ def edit_post(post_id):
                     thumbnail_filename=thumbnail_filename,
                     mimetype=main_image_file.mimetype,
                     filepath=filepath_rel,
-                    thumbnail_filepath=thumbnail_filepath_rel if thumbnail_filename else None,
+                    thumbnail_filepath=thumbnail_filepath_rel,
                     user_id=current_user.id,
                     alt_text=form.main_image_alt_text.data
                 )
@@ -414,10 +436,17 @@ def edit_post(post_id):
     return render_template('posts/edit_post.html', form=form, post=post, title='投稿編集', is_edit=True)
 
 
+
+
 @bp.route('/posts/delete/<uuid:post_id>', methods=['POST'])
 @login_required
-@roles_required('admin', 'editor') 
 def delete_post(post_id):
+    # 手動の権限チェック
+    required_roles = ['admin', 'editor']
+    if not any(Permission(RoleNeed(role_name)).can() for role_name in required_roles):
+        flash('アクセス権限がありません。', 'danger')
+        abort(403) # または redirect(url_for('home.index')) など
+
     post_to_delete = db.session.get(Post, post_id)
     if not post_to_delete:
         flash('投稿が見つかりません。', 'danger')
@@ -442,8 +471,13 @@ def delete_post(post_id):
 # --- カテゴリ管理 ---
 @bp.route('/categories')
 @login_required
-@roles_required('admin', 'editor')
 def list_categories():
+    # 手動の権限チェック
+    required_roles = ['admin', 'editor']
+    if not any(Permission(RoleNeed(role_name)).can() for role_name in required_roles):
+        flash('アクセス権限がありません。', 'danger')
+        abort(403) # または redirect(url_for('home.index')) など
+
     categories = Category.query.order_by(Category.name).all()
     csrf_form = DeleteForm()
     return render_template('categories/list_categories.html', categories=categories, title='カテゴリ管理', csrf_form=csrf_form)
@@ -471,8 +505,13 @@ def add_category():
 
 @bp.route('/categories/edit/<uuid:category_id>', methods=['GET', 'POST'])
 @login_required
-@roles_required('admin', 'editor')
 def edit_category(category_id):
+    # 手動の権限チェック
+    required_roles = ['admin', 'editor']
+    if not any(Permission(RoleNeed(role_name)).can() for role_name in required_roles):
+        flash('アクセス権限がありません。', 'danger')
+        abort(403) # または redirect(url_for('home.index')) など
+
     from app.forms import CategoryForm 
     category = db.session.get(Category, category_id)
     if category is None:
@@ -489,10 +528,15 @@ def edit_category(category_id):
 
 @bp.route('/categories/delete/<uuid:category_id>', methods=['POST'])
 @login_required
-@roles_required('admin', 'editor')
 def delete_category(category_id):
+    # 手動の権限チェック
+    required_roles = ['admin', 'editor']
+    if not any(Permission(RoleNeed(role_name)).can() for role_name in required_roles):
+        flash('アクセス権限がありません。', 'danger')
+        abort(403) # または redirect(url_for('home.index')) など
+
     category_to_delete = db.session.get(Category, category_id)
-    if not category_to_delete:
+    if category_to_delete is None:
         flash('カテゴリが見つかりません。', 'danger')
         return redirect(url_for('blog_admin_bp.list_categories'))
     
@@ -512,16 +556,26 @@ def delete_category(category_id):
 # --- タグ管理 ---
 @bp.route('/tags')
 @login_required
-@roles_required('admin', 'editor')
 def list_tags():
+    # 手動の権限チェック
+    required_roles = ['admin', 'editor']
+    if not any(Permission(RoleNeed(role_name)).can() for role_name in required_roles):
+        flash('アクセス権限がありません。', 'danger')
+        abort(403) # または redirect(url_for('home.index')) など
+
     tags = Tag.query.order_by(Tag.name).all()
     csrf_form = DeleteForm()
     return render_template('tags/list_tags.html', tags=tags, title='タグ管理', csrf_form=csrf_form)
 
 @bp.route('/tags/add', methods=['GET', 'POST'])
 @login_required
-@roles_required('admin', 'editor')
 def add_tag():
+    # 手動の権限チェック
+    required_roles = ['admin', 'editor']
+    if not any(Permission(RoleNeed(role_name)).can() for role_name in required_roles):
+        flash('アクセス権限がありません。', 'danger')
+        abort(403) # または redirect(url_for('home.index')) など
+
     from app.forms import TagForm 
     form = TagForm()
     if form.validate_on_submit():
@@ -534,8 +588,13 @@ def add_tag():
 
 @bp.route('/tags/edit/<uuid:tag_id>', methods=['GET', 'POST'])
 @login_required
-@roles_required('admin', 'editor')
 def edit_tag(tag_id):
+    # 手動の権限チェック
+    required_roles = ['admin', 'editor']
+    if not any(Permission(RoleNeed(role_name)).can() for role_name in required_roles):
+        flash('アクセス権限がありません。', 'danger')
+        abort(403) # または redirect(url_for('home.index')) など
+
     from app.forms import TagForm 
     tag = db.session.get(Tag, tag_id)
     if tag is None:
@@ -552,10 +611,15 @@ def edit_tag(tag_id):
 
 @bp.route('/tags/delete/<uuid:tag_id>', methods=['POST'])
 @login_required
-@roles_required('admin', 'editor')
 def delete_tag(tag_id):
+    # 手動の権限チェック
+    required_roles = ['admin', 'editor']
+    if not any(Permission(RoleNeed(role_name)).can() for role_name in required_roles):
+        flash('アクセス権限がありません。', 'danger')
+        abort(403) # または redirect(url_for('home.index')) など
+
     tag_to_delete = db.session.get(Tag, tag_id)
-    if not tag_to_delete:
+    if tag_to_delete is None:
         flash('タグが見つかりません。', 'danger')
         return redirect(url_for('blog_admin_bp.list_tags'))
 
@@ -580,11 +644,7 @@ def delete_tag(tag_id):
 @bp.route('/uploads/images/json') 
 @login_required 
 def get_images_json():
-    if current_user.has_role('admin'):
-        images = Image.query.order_by(Image.uploaded_at.desc()).all()
-    else:
-        images = Image.query.filter_by(user_id=current_user.id).order_by(Image.uploaded_at.desc()).all()
-
+    images = Image.query.order_by(Image.uploaded_at.desc()).all()
     image_list = []
     for img in images:
         image_list.append({
@@ -596,12 +656,17 @@ def get_images_json():
             'url': img.url, 
             'thumbnail_url': img.thumbnail_url 
         })
-    return jsonify(image_list)
+    return jsonify({"images": image_list})
 
 @bp.route('/images')
 @login_required
-@roles_required('admin', 'editor', 'poster')
 def list_images():
+    # 手動の権限チェック
+    required_roles = ['admin', 'editor', 'poster']
+    if not any(Permission(RoleNeed(role_name)).can() for role_name in required_roles):
+        flash('アクセス権限がありません。', 'danger')
+        abort(403) # または redirect(url_for('home.index')) など
+
     if current_user.has_role('admin'):
         images = Image.query.order_by(Image.uploaded_at.desc()).all()
     else:
@@ -610,8 +675,13 @@ def list_images():
 
 @bp.route('/images/upload', methods=['GET', 'POST'])
 @login_required
-@roles_required('admin', 'editor', 'poster')
 def upload_image():
+    # 手動の権限チェック
+    required_roles = ['admin', 'editor', 'poster']
+    if not any(Permission(RoleNeed(role_name)).can() for role_name in required_roles):
+        flash('アクセス権限がありません。', 'danger')
+        abort(403) # または redirect(url_for('home.index')) など
+
     form = ImageUploadForm()
     if form.validate_on_submit():
         image_file = form.image_file.data
@@ -630,8 +700,8 @@ def upload_image():
                 img_pil.thumbnail(current_app.config['THUMBNAIL_SIZE'])
                 img_pil.save(thumbnail_filepath_abs)
                 
-                filepath_rel = os.path.join(current_app.config['UPLOAD_FOLDER_RELATIVE_PATH'], unique_filename).replace('\\', '/')
-                thumbnail_filepath_rel = os.path.join(current_app.config['THUMBNAIL_FOLDER_RELATIVE_PATH'], thumbnail_filename).replace('\\', '/')
+                filepath_rel = os.path.join(current_app.config['UPLOAD_FOLDER_RELATIVE_PATH'], unique_filename).replace('', '/')
+                thumbnail_filepath_rel = os.path.join(current_app.config['THUMBNAIL_FOLDER_RELATIVE_PATH'], thumbnail_filename).replace('', '/')
                 
             except Exception as e:
                 current_app.logger.error(f"サムネイル生成中にエラーが発生しました: {e}")
@@ -658,8 +728,13 @@ def upload_image():
 
 @bp.route('/images/bulk_upload', methods=['GET', 'POST'])
 @login_required
-@roles_required('admin', 'editor', 'poster')
 def bulk_upload_images():
+    # 手動の権限チェック
+    required_roles = ['admin', 'editor', 'poster']
+    if not any(Permission(RoleNeed(role_name)).can() for role_name in required_roles):
+        flash('アクセス権限がありません。', 'danger')
+        abort(403) # または redirect(url_for('home.index')) など
+
     form = BulkImageUploadForm()
     if form.validate_on_submit():
         uploaded_count = 0
@@ -685,8 +760,8 @@ def bulk_upload_images():
                         thumbnail_filename = None
                         thumbnail_filepath_abs = None 
 
-                    filepath_rel = os.path.join(current_app.config['UPLOAD_FOLDER_RELATIVE_PATH'], unique_filename).replace('\\', '/')
-                    thumbnail_filepath_rel = os.path.join(current_app.config['THUMBNAIL_FOLDER_RELATIVE_PATH'], thumbnail_filename).replace('\\', '/') if thumbnail_filename else None
+                    filepath_rel = os.path.join(current_app.config['UPLOAD_FOLDER_RELATIVE_PATH'], unique_filename).replace('', '/')
+                    thumbnail_filepath_rel = os.path.join(current_app.config['THUMBNAIL_FOLDER_RELATIVE_PATH'], thumbnail_filename).replace('', '/') if thumbnail_filename else None
 
                     new_image = Image(
                         original_filename=original_filename,
@@ -717,8 +792,13 @@ def bulk_upload_images():
 
 @bp.route('/images/edit/<uuid:image_id>', methods=['GET', 'POST'])
 @login_required
-@roles_required('admin', 'editor', 'poster')
 def edit_image(image_id):
+    # 手動の権限チェック
+    required_roles = ['admin', 'editor', 'poster']
+    if not any(Permission(RoleNeed(role_name)).can() for role_name in required_roles):
+        flash('アクセス権限がありません。', 'danger')
+        abort(403) # または redirect(url_for('home.index')) など
+
     image = db.session.get(Image, image_id)
     if image is None:
         flash('画像が見つかりません。', 'danger')
@@ -745,10 +825,15 @@ def edit_image(image_id):
 
 @bp.route('/images/delete/<uuid:image_id>', methods=['POST'])
 @login_required
-@roles_required('admin', 'editor', 'poster')
 def delete_image(image_id):
+    # 手動の権限チェック
+    required_roles = ['admin', 'editor', 'poster']
+    if not any(Permission(RoleNeed(role_name)).can() for role_name in required_roles):
+        flash('アクセス権限がありません。', 'danger')
+        abort(403) # または redirect(url_for('home.index')) など
+
     image_to_delete = db.session.get(Image, image_id)
-    if not image_to_delete:
+    if image_to_delete is None:
         flash('画像が見つかりません。', 'danger')
         return redirect(url_for('blog_admin_bp.list_images'))
     
@@ -787,14 +872,18 @@ def delete_image(image_id):
         db.session.rollback()
         flash(f'画像の削除中にエラーが発生しました: {e}', 'danger')
         current_app.logger.error(f"画像の削除中にエラーが発生しました (DBロールバック): {e}", exc_info=True)
-
     return redirect(url_for('blog_admin_bp.list_images'))
 
 # --- ユーザー管理 ---
 @bp.route('/users')
 @login_required
-@roles_required(['admin']) # 管理者のみがアクセス可能
 def list_users():
+    # 手動の権限チェック
+    required_roles = ['admin']
+    if not any(Permission(RoleNeed(role_name)).can() for role_name in required_roles):
+        flash('アクセス権限がありません。', 'danger')
+        abort(403) # または redirect(url_for('home.index')) など
+
     users = User.query.order_by(User.username).all()
     csrf_form = DeleteForm() # 削除用フォーム
     return render_template('users/list_users.html', users=users, title='ユーザー管理', csrf_form=csrf_form)
@@ -802,8 +891,13 @@ def list_users():
 # ユーザー編集ルート
 @bp.route('/users/edit/<uuid:user_id>', methods=['GET', 'POST'])
 @login_required
-@roles_required(['admin']) # 管理者のみがアクセス可能
 def edit_user(user_id):
+    # 手動の権限チェック
+    required_roles = ['admin']
+    if not any(Permission(RoleNeed(role_name)).can() for role_name in required_roles):
+        flash('アクセス権限がありません。', 'danger')
+        abort(403) # または redirect(url_for('home.index')) など
+
     user = db.session.get(User, user_id)
     if user is None:
         flash('ユーザーが見つかりません。', 'danger')
@@ -839,10 +933,15 @@ def edit_user(user_id):
 # ユーザー削除ルート
 @bp.route('/users/delete/<uuid:user_id>', methods=['POST'])
 @login_required
-@roles_required(['admin']) # 管理者のみがアクセス可能
 def delete_user(user_id):
+    # 手動の権限チェック
+    required_roles = ['admin']
+    if not any(Permission(RoleNeed(role_name)).can() for role_name in required_roles):
+        flash('アクセス権限がありません。', 'danger')
+        abort(403) # または redirect(url_for('home.index')) など
+
     user_to_delete = db.session.get(User, user_id)
-    if not user_to_delete:
+    if user_to_delete is None:
         flash('ユーザーが見つかりません。', 'danger')
         return redirect(url_for('blog_admin_bp.list_users'))
 
@@ -870,25 +969,110 @@ def delete_user(user_id):
 
 @bp.route('/comments')
 @login_required
-@roles_required(['admin', 'editor', 'poster'])
 def list_comments():
+    # 手動の権限チェック
+    required_roles = ['admin', 'editor', 'poster']
+    if not any(Permission(RoleNeed(role_name)).can() for role_name in required_roles):
+        flash('アクセス権限がありません。', 'danger')
+        abort(403) # または redirect(url_for('home.index')) など
+
     # コメント一覧を取得してテンプレートに渡す
     comments = Comment.query.all()
     delete_form = DeleteForm()
     return render_template('admin/comments.html', comments=comments, delete_form=delete_form)
 
+@bp.route('/comments/approve/<uuid:comment_id>', methods=['POST'])
+@login_required
+def approve_comment(comment_id):
+    # 手動の権限チェック
+    required_roles = ['admin', 'editor', 'poster']
+    if not any(Permission(RoleNeed(role_name)).can() for role_name in required_roles):
+        flash('アクセス権限がありません。', 'danger')
+        abort(403)
+
+    comment = db.session.get(Comment, comment_id)
+    if not comment:
+        flash('コメントが見つかりません。', 'danger')
+        return redirect(url_for('blog_admin_bp.list_comments'))
+
+    comment.is_approved = True
+    db.session.commit()
+    flash('コメントを承認しました。', 'success')
+    return redirect(url_for('blog_admin_bp.list_comments'))
+
+@bp.route('/comments/edit/<uuid:comment_id>', methods=['GET', 'POST'])
+@login_required
+def edit_comment(comment_id):
+    # 手動の権限チェック
+    required_roles = ['admin', 'editor']
+    if not any(Permission(RoleNeed(role_name)).can() for role_name in required_roles):
+        flash('アクセス権限がありません。', 'danger')
+        abort(403)
+
+    comment = db.session.get(Comment, comment_id)
+    if not comment:
+        flash('コメントが見つかりません。', 'danger')
+        return redirect(url_for('blog_admin_bp.list_comments'))
+
+    from app.forms import CommentAdminEditForm
+    form = CommentAdminEditForm(obj=comment)
+
+    if form.validate_on_submit():
+        comment.body = form.body.data
+        comment.is_approved = form.is_approved.data
+        db.session.commit()
+        flash('コメントが更新されました。', 'success')
+        return redirect(url_for('blog_admin_bp.list_comments'))
+
+    return render_template('admin/edit_comment.html', form=form, comment=comment, title='コメント編集')
+
+@bp.route('/comments/delete/<uuid:comment_id>', methods=['POST'])
+@login_required
+def delete_comment(comment_id):
+    # 手動の権限チェック
+    required_roles = ['admin', 'editor']
+    if not any(Permission(RoleNeed(role_name)).can() for role_name in required_roles):
+        flash('アクセス権限がありません。', 'danger')
+        abort(403)
+
+    comment_to_delete = db.session.get(Comment, comment_id)
+    if not comment_to_delete:
+        flash('コメントが見つかりません。', 'danger')
+        return redirect(url_for('blog_admin_bp.list_comments'))
+
+    try:
+        db.session.delete(comment_to_delete)
+        db.session.commit()
+        flash('コメントが削除されました。', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'コメントの削除中にエラーが発生しました: {e}', 'danger')
+        current_app.logger.error(f"コメントの削除中にエラーが発生しました: {e}", exc_info=True)
+
+    return redirect(url_for('blog_admin_bp.list_comments'))
+
 @bp.route('/roles')
 @login_required
-@roles_required(['admin'])
 def manage_roles():
+    # 手動の権限チェック
+    required_roles = ['admin']
+    if not any(Permission(RoleNeed(role_name)).can() for role_name in required_roles):
+        flash('アクセス権限がありません。', 'danger')
+        abort(403) # または redirect(url_for('home.index')) など
+
     # ロール一覧を取得してテンプレートに渡す
     roles = Role.query.all()
     return render_template('admin/roles.html', roles=roles)
 
 @bp.route('/posts/toggle_publish/<uuid:post_id>', methods=['POST'])
 @login_required
-@roles_required(['admin', 'editor', 'poster'])
 def toggle_publish(post_id):
+    # 手動の権限チェック
+    required_roles = ['admin', 'editor', 'poster']
+    if not any(Permission(RoleNeed(role_name)).can() for role_name in required_roles):
+        flash('アクセス権限がありません。', 'danger')
+        abort(403) # または redirect(url_for('home.index')) など
+
     post = db.session.get(Post, post_id)
     if not post:
         flash('投稿が見つかりません。', 'danger')
@@ -901,8 +1085,13 @@ def toggle_publish(post_id):
 # ユーザー追加ルート
 @bp.route('/users/add', methods=['GET', 'POST'])
 @login_required
-@roles_required(['admin'])  # 管理者のみがアクセス可能
 def add_user():
+    # 手動の権限チェック
+    required_roles = ['admin']
+    if not any(Permission(RoleNeed(role_name)).can() for role_name in required_roles):
+        flash('アクセス権限がありません。', 'danger')
+        abort(403) # または redirect(url_for('home.index')) など
+
     form = UserEditForm()
     form.roles.choices = [(r.id, r.name) for r in Role.query.order_by(Role.name).all()]
 

@@ -9,7 +9,7 @@
                     <h2 class="card-title mb-0">新しいタグを作成</h2>
                 </div>
                 <div class="card-body">
-                    <form method="POST" action="{{ url_for('admin.new_tag') }}">
+                    <form method="POST" action="{{ url_for('blog_admin_bp.add_tag') }}">
                         {{ form.csrf_token }}
                         {{ form.hidden_tag() }}
                         <div class="mb-3">

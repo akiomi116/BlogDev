@@ -7,47 +7,53 @@ from app.models import User, Role # Import Role
 from app.extensions import db
 from app.forms import LoginForm, RegistrationForm, ChangePasswordForm, ResetPasswordRequestForm, ResetPasswordForm
 # from app.email import send_password_reset_email
-from app.decorators import roles_required
+
 
 bp = Blueprint('auth', __name__)
 
-@bp.route('/login', methods=['GET', 'POST'], endpoint='login') # ★追加: endpoint='login'
-def login():
-    if current_user.is_authenticated:
-        # 管理者ならadminダッシュボードへ、そうでなければhome.indexへ
-        if current_user.has_role('admin') or current_user.has_role('editor') or current_user.has_role('poster'):
-            flash('ログインしました。', 'info')
-            current_app.logger.info(f"User {current_user.username} logged in. Redirecting to admin.index")
-            return redirect(url_for('/admin/'))
-        else:
-            flash('ログインしました。', 'info')
-            current_app.logger.info(f"User {current_user.username} logged in. Redirecting to home.index")
-            return redirect(url_for('home.index'))
-    
-    form = LoginForm()
-    if form.validate_on_submit():
-        user = User.query.filter_by(email=form.email.data).first()
-        if user is None or not check_password_hash(user.password_hash, form.password.data):
-            flash('無効なメールアドレスまたはパスワードです。', 'danger')
-            return redirect(url_for('auth.login'))
-        
-        login_user(user, remember=form.remember_me.data)
-        next_page = request.args.get('next')
-        # next_page が安全なURLであることを確認するロジックを追加することが望ましい
-        # 例えば werkzeug.utils.url_parse を使ってホスト名が同じか確認するなど
-        
-        # ログイン成功後のリダイレクト先を修正
-        if current_user.has_role('admin') or current_user.has_role('editor') or current_user.has_role('poster'):
-            flash('ログインしました。', 'info')
-            current_app.logger.info(f"User {user.username} logged in. Redirecting to admin.index")
-            return redirect(next_page or url_for('blog_admin_bp.index'))
-        else:
-            flash('ログインしました。', 'info')
-            current_app.logger.info(f"User {user.username} logged in. Redirecting to home.index")
-            return redirect(next_page or url_for('home.index'))
-
-
-    return render_template('auth/login.html', title='ログイン', form=form)
+# @bp.route('/login', methods=['GET', 'POST'], endpoint='login') # ★追加: endpoint='login'
+# def login():
+#     if current_user.is_authenticated:
+#         # 管理者ならadminダッシュボードへ、そうでなければhome.indexへ
+#         if current_user.has_role('admin') or current_user.has_role('editor') or current_user.has_role('poster'):
+#             flash('ログインしました。', 'info')
+#             current_app.logger.info(f"User {current_user.username} logged in. Redirecting to admin.index")
+#             return redirect(url_for('/admin/'))
+#         else:
+#             flash('ログインしました。', 'info')
+#             current_app.logger.info(f"User {current_user.username} logged in. Redirecting to home.index")
+#             return redirect(url_for('home.index'))
+#     
+#     if request.method == 'POST':
+#         current_app.logger.debug(f"Request Headers: {request.headers}")
+#         current_app.logger.debug(f"Request Form Data: {request.form}")
+# 
+#     form = LoginForm()
+#     if form.validate_on_submit():
+#         user = User.query.filter_by(email=form.email.data).first()
+#         if user is None or not check_password_hash(user.password_hash, form.password.data):
+#             flash('無効なメールアドレスまたはパスワードです。', 'danger')
+#             return redirect(url_for('security.login'))
+#         
+#         login_user(user, remember=form.remember_me.data)
+#         next_page = request.args.get('next')
+#         # next_page が安全なURLであることを確認するロジックを追加することが望ましい
+#         # 例えば werkzeug.utils.url_parse を使ってホスト名が同じか確認するなど
+#         
+#         # ログイン成功後のリダイレクト先を修正
+#         if current_user.has_role('admin') or current_user.has_role('editor') or current_user.has_role('poster'):
+#             flash('ログインしました。', 'info')
+#             current_app.logger.info(f"User {user.username} logged in. Redirecting to admin.index")
+#             return redirect(next_page or url_for('blog_admin_bp.index'))
+#         else:
+#             flash('ログインしました。', 'info')
+#             current_app.logger.info(f"User {user.username} logged in. Redirecting to home.index")
+#             return redirect(next_page or url_for('home.index'))
+# 
+#     if form.errors:
+#         current_app.logger.error(f"Form validation errors: {form.errors}")
+# 
+#     return render_template('auth/login.html', title='ログイン', form=form)
 
 @bp.route('/logout', endpoint='logout') # ★追加: endpoint='logout'
 @login_required
@@ -84,7 +90,7 @@ def register():
         db.session.add(user)
         db.session.commit()
         flash('登録ありがとうございます！これでログインできます。', 'success')
-        return redirect(url_for('auth.login')) # 明示的にエンドポイント名を指定
+        return redirect(url_for('security.login')) # 明示的にエンドポイント名を指定
     return render_template('auth/register.html', title='ユーザー登録', form=form)
 
 @bp.route('/reset_password_request', methods=['GET', 'POST'], endpoint='reset_password_request') # ★追加: endpoint='reset_password_request'
@@ -97,7 +103,7 @@ def reset_password_request():
         if user:
             # send_password_reset_email(user)
             flash('パスワードリセットの手順をメールで送信しました。', 'info')
-            return redirect(url_for('auth.login')) # 明示的にエンドポイント名を指定
+            return redirect(url_for('security.login')) # 明示的にエンドポイント名を指定
     return render_template('auth/reset_password_request.html', title='パスワードリセット', form=form)
 
 # def send_password_reset_email(user):
@@ -127,7 +133,7 @@ def reset_password(token):
         user.password_hash = generate_password_hash(form.password.data)
         db.session.commit()
         flash('パスワードがリセットされました。新しいパスワードでログインしてください。', 'success')
-        return redirect(url_for('auth.login')) # 明示的にエンドポイント名を指定
+        return redirect(url_for('security.login')) # 明示的にエンドポイント名を指定
     return render_template('auth/reset_password.html', title='パスワードリセット', form=form)
 
 @bp.route('/change_password', methods=['GET', 'POST'], endpoint='change_password') # ★追加: endpoint='change_password'

@@ -9,6 +9,7 @@ import pytz # datetime.now(pytz.utc) を使用するため
 
 from flask import Flask, render_template, url_for, request, current_app, send_from_directory, g
 from flask_login import current_user
+from flask_wtf import CSRFProtect
 
 import config # config モジュールをインポート
 
@@ -28,10 +29,13 @@ from app.routes.auth import bp as auth_bp
 from app.routes.posts import public_posts_bp 
 
 # Flask-Security-Too のロガーを直接取得して設定
-logging.getLogger('flask_security').setLevel(logging.DEBUG) # ★この行を追加★
-logging.getLogger('flask_principal').setLevel(logging.DEBUG) # ★この行も追加★
+logging.getLogger('flask_security').setLevel(logging.INFO) # ★この行を追加★
+logging.getLogger('flask_principal').setLevel(logging.INFO) # ★この行も追加★
 
 
+
+# CSRF保護の初期化
+csrf = CSRFProtect()
 
 # アプリケーションファクトリ関数
 def create_app(config_class=config.Config):
@@ -68,7 +72,8 @@ def create_app(config_class=config.Config):
             app.logger.debug(f"DEBUG (before_request): current_user is authenticated. ID: {current_user.id}, Email: {current_user.email}, FS_Uniquifier: {current_user.fs_uniquifier}")
         else:
             app.logger.debug(f"DEBUG (before_request): current_user is NOT authenticated.")
-    # ★★★ここまで追加★★
+
+    
 
     # 拡張機能の初期化
     db.init_app(app)
@@ -125,21 +130,20 @@ def create_app(config_class=config.Config):
     #     return db.session.get(User, user_id)
 
     # ロギングの設定
-    if not app.debug and not app.testing:
-        if not os.path.exists('logs'):
-            os.mkdir('logs')
-        file_handler = RotatingFileHandler('logs/akiomi_blog.log', maxBytes=10240, backupCount=10)
-        file_handler.setFormatter(logging.Formatter(
-            '%(asctime)s %(levelname)s: %(message)s [in %(pathname)s:%(lineno)d]'))
-        file_handler.setLevel(logging.INFO)
-        app.logger.addHandler(file_handler)
+    if not os.path.exists('logs'):
+        os.mkdir('logs')
+    file_handler = RotatingFileHandler('logs/akiomi_blog.log', maxBytes=10240, backupCount=10)
+    file_handler.setFormatter(logging.Formatter(
+        '%(asctime)s %(levelname)s: %(message)s [in %(pathname)s:%(lineno)d]'))
+    file_handler.setLevel(logging.INFO)
+    app.logger.addHandler(file_handler)
 
-        # stdout へのロギング設定 (Gunicorn などでコンソール出力を見るため)
-        stream_handler = logging.StreamHandler()
-        stream_handler.setLevel(logging.DEBUGINFO)
-        app.logger.addHandler(stream_handler) 
-        app.logger.setLevel(logging.DEBUG) 
-        app.logger.info('Akiomi Blog startup')
+    # stdout へのロギング設定 (Gunicorn などでコンソール出力を見るため)
+    stream_handler = logging.StreamHandler()
+    stream_handler.setLevel(logging.INFO)
+    app.logger.addHandler(stream_handler) 
+    app.logger.setLevel(logging.INFO) 
+    app.logger.info('Akiomi Blog startup')
 
     # コンテキストプロセッサ: 全てのテンプレートで 'current_year' を利用可能にする
     @app.context_processor

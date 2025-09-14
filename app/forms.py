@@ -2,11 +2,12 @@
 
 from flask_wtf import FlaskForm
 from flask_wtf.file import  MultipleFileField, FileAllowed, FileRequired, FileField
-from wtforms import StringField, TextAreaField, BooleanField, SubmitField, PasswordField, SelectField, SelectMultipleField
+from wtforms import StringField, TextAreaField, BooleanField, SubmitField, PasswordField, SelectField, SelectMultipleField,HiddenField
 from wtforms.fields import EmailField
 from wtforms.validators import DataRequired, Length, Email, EqualTo, ValidationError, Optional
 from app.extensions import db
 from wtforms_sqlalchemy.fields import QuerySelectField, QuerySelectMultipleField
+import os
 
 import uuid  # UUIDTypeField のデフォルト値として uuid.uuid4 を使う場合に必要
 from app.models import Category, Tag, Image, User, Role  # Role モデルをインポート
@@ -17,18 +18,17 @@ class DeleteForm(FlaskForm):
 
 class LoginForm(FlaskForm):
     """ログインフォーム"""
-    email = EmailField('メールアドレス', validators=[DataRequired(), Email()])
-    password = PasswordField('パスワード', validators=[DataRequired()])
-    remember_me = BooleanField('ログイン情報を記憶する')
+    email = StringField('メールアドレス', validators=[DataRequired(), Email()])
+    password = PasswordField('パスワード', validators=[DataRequired(), Length(min=6)])
+    remember_me = BooleanField('ログイン状態を保持する')
     submit = SubmitField('ログイン')
 
 class RegistrationForm(FlaskForm):
     """ユーザー登録フォーム"""
-    username = StringField('ユーザー名', validators=[DataRequired(), Length(min=3, max=64)])
-    email = EmailField('メールアドレス', validators=[DataRequired(), Email()])
+    username = StringField('ユーザー名', validators=[DataRequired(), Length(min=2, max=20)])
+    email = StringField('メールアドレス', validators=[DataRequired(), Email()])
     password = PasswordField('パスワード', validators=[DataRequired(), Length(min=6)])
-    password2 = PasswordField(
-        'パスワード再入力', validators=[DataRequired(), EqualTo('password', message='パスワードが一致しません。')])
+    confirm_password = PasswordField('パスワードの確認', validators=[DataRequired(), Length(min=6)])
     submit = SubmitField('登録')
 
     def validate_username(self, username):
@@ -73,6 +73,9 @@ class PostForm(FlaskForm):
     main_image_file = FileField('メイン画像アップロード', validators=[Optional()
         #FileAllowed(['jpg', 'jpeg', 'png', 'gif', 'webp'], '画像ファイル (JPG, JPEG, PNG, GIF, WEBP) のみ許可されます')
     ])
+    
+    selected_image_id = HiddenField('選択画像ID')
+    
     
     # 既存のメイン画像を選択するためのフィールド (IDをhiddenで送る想定)
     main_image = QuerySelectField(
@@ -133,16 +136,15 @@ class PostForm(FlaskForm):
             has_upload = False
             
             if file_data and file_data.filename:
-            # ここが大事
-                if hasattr(file_data, 'content_length'):
-                    has_upload = file_data.content_length and file_data.content_length > 0
-                else:
-                # 古いWerkzeug用
-                    file_data.stream.seek(0, os.SEEK_END)
-                    has_upload = file_data.stream.tell() > 0
-                    file_data.stream.seek(0)
+                # content_length is unreliable, so check the stream size directly.
+                # Move to the end of the stream to get its size.
+                file_data.stream.seek(0, os.SEEK_END) 
+                file_size = file_data.stream.tell()
+                # IMPORTANT: Reset stream position for further processing
+                file_data.stream.seek(0) 
+                has_upload = file_size > 0
 
-            has_gallery_selection = self.main_image.data is not None
+            has_gallery_selection = self.selected_image_id.data
 
             if not (has_upload or has_gallery_selection):
                 msg = 'メイン画像は必須です。ファイルをアップロードするか、ギャラリーから選択してください。'
@@ -183,6 +185,13 @@ class TagForm(FlaskForm):
 
     def validate_name(self, name):
         pass
+
+class CommentAdminEditForm(FlaskForm):
+    """コメント編集フォーム (管理者用)"""
+    body = TextAreaField('内容', validators=[DataRequired()])
+    is_approved = BooleanField('承認済み')
+    submit = SubmitField('更新')
+
 
 class CommentForm(FlaskForm):
     """コメントフォーム"""

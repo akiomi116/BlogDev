@@ -15,9 +15,9 @@ class Config:
     # 良い例2: デバッグ/開発用に、コード内に固定の文字列を直接書く (本番環境では非推奨)
     # 非常に長く、推測されにくい文字列にしてください。
     
-    SECRET_KEY = 'TEST_SECRET_KEY'
+    SECRET_KEY = 'ihsnAki9'
 
-    SESSION_COOKIE_SAMESITE = "None"
+    # SESSION_COOKIE_SAMESITE = "None"
     SESSION_COOKIE_SECURE = False 
 
     # SECURITY_REGISTERABLE = True # ユーザー登録を許可する場合
