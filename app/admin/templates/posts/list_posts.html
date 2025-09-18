@@ -67,18 +67,18 @@
                     </div>
                     <div class="card-footer bg-white border-top-0 d-flex justify-content-end">
                         {# 編集ボタン (適切なロールとユーザーの場合) #}
-                        {% if current_user.is_authenticated and (current_user.has_role('admin') or current_user.id == post.user_id) %}
+                        {% if current_user.is_authenticated and (current_user.has_role('admin') or current_user.has_role('poster') or current_user.id == post.user_id) %}
                             <a href="{{ url_for('blog_admin_bp.edit_post', post_id=post.id) }}" class="btn btn-sm btn-outline-info me-2 rounded-pill"><i class="fas fa-edit"></i> 編集</a>
                         {% endif %}
                         {# 削除ボタン (適切なロールの場合) #}
-                        {% if current_user.is_authenticated and current_user.has_role('admin') %}
+                        {% if current_user.is_authenticated and (current_user.has_role('admin') or current_user.has_role('poster')) %}
                             <form action="{{ url_for('blog_admin_bp.delete_post', post_id=post.id) }}" method="POST" class="d-inline">
                                 {{ csrf_form.csrf_token }}
                                 <button type="submit" class="btn btn-sm btn-outline-danger rounded-pill" onclick="return confirm('本当にこの投稿を削除しますか？');"><i class="fas fa-trash-alt"></i> 削除</button>
                             </form>
                         {% endif %}
                         {# 公開/非公開切り替えボタン (適切なロールの場合) #}
-                        {% if current_user.is_authenticated and (current_user.has_role('admin') or current_user.has_role('editor') or current_user.id == post.user_id) %}
+                        {% if current_user.is_authenticated and (current_user.has_role('admin') or current_user.has_role('poster') or current_user.id == post.user_id) %}
                             <form action="{{ url_for('blog_admin_bp.toggle_publish', post_id=post.id) }}" method="POST" class="d-inline ms-2">
                                 {{ csrf_form.csrf_token }}
                                 <button type="submit" class="btn btn-sm {% if post.is_published %}btn-outline-warning{% else %}btn-outline-success{% endif %} rounded-pill">

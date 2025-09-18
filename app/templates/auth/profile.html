@@ -27,7 +27,7 @@
                 <div class="mb-3 row">
                     <label for="role" class="col-sm-4 col-form-label text-end fw-bold">ロール:</label>
                     <div class="col-sm-8">
-                        <input type="text" readonly class="form-control-plaintext" id="role" value="{{ user.role.name if user.role else 'なし' }}">
+                        <input type="text" readonly class="form-control-plaintext" id="role" value="{{ user.roles|map(attribute='name')|join(', ') if user.roles else 'なし' }}">
                     </div>
                 </div>
                 

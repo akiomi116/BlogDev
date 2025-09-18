@@ -144,10 +144,6 @@ def posts_by_category(category_id):
         page=page, per_page=current_app.config.get('POSTS_PER_PAGE', 10), error_out=False
     )
     posts = posts_pagination.items
-    
-    image_ids = [post.main_image_id for post in posts if post.main_image_id]
-    images = Image.query.filter(Image.id.in_(image_ids)).all() if image_ids else []
-    image_map = {str(image.id): image for image in images}
 
     next_url = url_for('home.posts_by_category', category_id=category.id, page=posts_pagination.next_num) if posts_pagination.has_next else None
     prev_url = url_for('home.posts_by_category', category_id=category.id, page=posts_pagination.prev_num) if posts_pagination.has_prev else None
@@ -159,7 +155,6 @@ def posts_by_category(category_id):
     return render_template('home/posts_by_category.html', 
                            category=category, 
                            posts=posts,
-                           image_map=image_map,
                            posts_pagination=posts_pagination, 
                            next_url=next_url,
                            prev_url=prev_url,

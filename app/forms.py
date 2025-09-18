@@ -1,5 +1,6 @@
 # F:\dev\BrogDev\app\forms.py
 
+from flask_security.forms import LoginForm as SecurityLoginForm, RegisterForm as SecurityRegisterForm
 from flask_wtf import FlaskForm
 from flask_wtf.file import  MultipleFileField, FileAllowed, FileRequired, FileField
 from wtforms import StringField, TextAreaField, BooleanField, SubmitField, PasswordField, SelectField, SelectMultipleField,HiddenField
@@ -9,26 +10,34 @@ from app.extensions import db
 from wtforms_sqlalchemy.fields import QuerySelectField, QuerySelectMultipleField
 import os
 
-import uuid  # UUIDTypeField のデフォルト値として uuid.uuid4 を使う場合に必要
-from app.models import Category, Tag, Image, User, Role  # Role モデルをインポート
+import uuid
+from app.models import Category, Tag, Image, User, Role
 
 class DeleteForm(FlaskForm):
     """汎用的な削除確認フォーム（CSRFトークンのみ）"""
     submit = SubmitField('削除')
 
-class LoginForm(FlaskForm):
+class LoginForm(SecurityLoginForm):
     """ログインフォーム"""
     email = StringField('メールアドレス', validators=[DataRequired(), Email()])
     password = PasswordField('パスワード', validators=[DataRequired(), Length(min=6)])
-    remember_me = BooleanField('ログイン状態を保持する')
+    remember = BooleanField('ログイン状態を保持する')
     submit = SubmitField('ログイン')
 
-class RegistrationForm(FlaskForm):
+class RegistrationForm(SecurityRegisterForm):
     """ユーザー登録フォーム"""
     username = StringField('ユーザー名', validators=[DataRequired(), Length(min=2, max=20)])
     email = StringField('メールアドレス', validators=[DataRequired(), Email()])
     password = PasswordField('パスワード', validators=[DataRequired(), Length(min=6)])
-    confirm_password = PasswordField('パスワードの確認', validators=[DataRequired(), Length(min=6)])
+    confirm_password = PasswordField('パスワードの確認', validators=[DataRequired(), EqualTo('password', message='パスワードが一致しません。')])
+    role = QuerySelectField(
+        'ロール',
+        query_factory=lambda: Role.query.order_by(Role.name).all(),
+        get_pk=lambda a: str(a.id),
+        get_label=lambda a: a.name,
+        allow_blank=False,
+        validators=[DataRequired()]
+    )
     submit = SubmitField('登録')
 
     def validate_username(self, username):
@@ -111,7 +120,7 @@ class PostForm(FlaskForm):
     tags = QuerySelectMultipleField(
         'タグ',
         query_factory=lambda: Tag.query.order_by(Tag.name).all(),
-        get_pk=lambda a: a.id,
+        get_pk=lambda a: str(a.id),
         get_label=lambda a: a.name,
         allow_blank=True,
         validators=[Optional()]
@@ -181,10 +190,28 @@ class CategoryForm(FlaskForm):
 class TagForm(FlaskForm):
     """タグ作成・編集フォーム"""
     name = StringField('タグ名', validators=[DataRequired(), Length(min=1, max=50)])
+    slug = StringField('スラッグ', validators=[Optional(), Length(max=100)])
     submit = SubmitField('保存')
 
     def validate_name(self, name):
         pass
+
+class RoleForm(FlaskForm):
+    """ロール作成・編集フォーム"""
+    name = StringField('ロール名', validators=[DataRequired(), Length(min=2, max=64)])
+    description = TextAreaField('説明', validators=[Optional(), Length(max=256)])
+    submit = SubmitField('保存')
+
+    def __init__(self, original_name=None, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.original_name = original_name
+
+    def validate_name(self, name):
+        if name.data != self.original_name:
+            role = Role.query.filter_by(name=name.data).first()
+            if role:
+                raise ValidationError('そのロール名はすでに使用されています。')
+
 
 class CommentAdminEditForm(FlaskForm):
     """コメント編集フォーム (管理者用)"""
@@ -204,36 +231,29 @@ class UserEditForm(FlaskForm):
     username = StringField('ユーザー名', validators=[DataRequired(), Length(min=3, max=64)])
     email = EmailField('メールアドレス', validators=[DataRequired(), Email()])
     password = PasswordField('新しいパスワード', validators=[Optional(), Length(min=6)], description='変更しない場合は空のままにしてください。')
+    confirm_password = PasswordField('新しいパスワードの確認', validators=[Optional(), EqualTo('password', message='パスワードが一致しません。')])
     is_active = BooleanField('アカウントをアクティブにする')
     
     # ロール選択フィールド (複数選択可)
     roles = QuerySelectMultipleField(
         'ロール',
         query_factory=lambda: Role.query.order_by(Role.name).all(),
-        get_pk=lambda a: a.id,
+        get_pk=lambda a: str(a.id),
         get_label=lambda a: a.name,
         allow_blank=True,
         validators=[Optional()]
     )
     submit = SubmitField('ユーザー情報を更新')
 
-    # メールアドレスの重複チェック (編集時、自分自身は除く)
-    # obj=user でインスタンス化される場合、WTForms は通常 __init__ に obj を渡す
-    # ただし、original_email を明示的に渡す場合は以下のようにする
     def __init__(self, original_email=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # original_email が渡されなかった場合は、obj から初期値を設定する（編集時）
-        # 新規作成フォームとしてUserEditFormを使わない限り、これは常に設定される
         if original_email is None and kwargs.get('obj'):
             self.original_email = kwargs['obj'].email
         else:
             self.original_email = original_email
 
     def validate_email(self, email):
-        # フォームにデータがロードされている場合のみチェックを実行
-        # (新規フォームと編集フォームで挙動を調整する必要がある場合)
         if email.data and email.data != self.original_email:
             user = User.query.filter_by(email=self.email.data).first()
             if user is not None:
                 raise ValidationError('そのメールアドレスはすでに登録されています。')
-

@@ -68,24 +68,24 @@ def register():
         return redirect(url_for('home.index'))
     form = RegistrationForm()
     if form.validate_on_submit():
-        print(form.errors)
-        user_role = Role.query.filter_by(name='user').first()
-        if not user_role:
-            user_role = Role(name='user')
-            db.session.add(user_role)
-            db.session.commit() 
-        
         user = User(
             username=form.username.data,
             email=form.email.data,
             password_hash=generate_password_hash(form.password.data)
         )
-        # Assign default 'user' role
-        user_role = Role.query.filter_by(name='user').first()
-        if user_role:
-            user.role = user_role
+        # フォームから選択されたロールを取得
+        selected_role = form.role.data
+        if selected_role:
+            user.roles.append(selected_role)
         else:
-            current_app.logger.warning("Default 'user' role not found during registration.")
+            # ロールが選択されなかった場合のフォールバック（フォームで必須にしているので通常は通らない）
+            user_role = Role.query.filter_by(name='user').first()
+            if user_role:
+                user.roles.append(user_role)
+            else:
+                current_app.logger.error("Default 'user' role not found and no role selected during registration.")
+                flash('登録処理中にエラーが発生しました。', 'danger')
+                return redirect(url_for('auth.register'))
 
         db.session.add(user)
         db.session.commit()

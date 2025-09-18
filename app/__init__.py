@@ -83,15 +83,16 @@ def create_app(config_class=config.Config):
     babel.init_app(app) # Babelの初期化
     mail.init_app(app)
     
-     # Flask-SecurityとFlask-Principalの初期化をここに追加
+    # Flask-SecurityとFlask-Principalの初期化をここに追加
     from app.models import User, Role # User と Role モデルをインポート
+    from app.forms import LoginForm, RegistrationForm # LoginForm, RegistrationForm をインポート
     
     # user_datastore を初期化
-    # extensions.py で定義した user_datastore 変数をここで上書きします。
-    # Pythonのimportの仕組み上、extensions.pyでNoneとして初期化されたuser_datastoreは、
-    # ここでインスタンス化することで、extensions.pyから参照されるsecurityオブジェクトにも反映されます。
-    # もしこれが上手くいかない場合は、security.user_datastore = ... のように直接代入することも検討します。
-    security.user_datastore = SQLAlchemyUserDatastore(db, User, Role) 
+    security.user_datastore = SQLAlchemyUserDatastore(db, User, Role)
+    
+    # カスタムフォームを設定
+    app.config['SECURITY_LOGIN_FORM'] = LoginForm
+    app.config['SECURITY_REGISTER_FORM'] = RegistrationForm
     
     # Securityを初期化
     security.init_app(app, datastore=security.user_datastore) # datastore 引数を明示的に指定
@@ -174,7 +175,7 @@ def create_app(config_class=config.Config):
     app.register_blueprint(home_bp)
     app.register_blueprint(auth_bp, url_prefix='/auth') 
     app.register_blueprint(public_posts_bp) 
-    app.register_blueprint(blog_admin_bp, url_prefix='/admin')
+    app.register_blueprint(blog_admin_bp)
     
 
     # 静的ファイル配信のためのカスタムエンドポイント (uploadsフォルダ用)

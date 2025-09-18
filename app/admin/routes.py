@@ -68,9 +68,18 @@ def slugify(text):
 # --- 管理ダッシュボードのルート ---
 @bp.route('/')
 @bp.route('/index')
-# @login_required
-# @roles_required('admin', 'editor', 'poster') 
+@login_required
+# @roles_required('admin', 'poster') 
 def index():
+    # --- デバッグコード ---
+    print(f"--- Admin Dashboard Access ---")
+    print(f"User: {current_user.username}")
+    print(f"User ID: {current_user.id}")
+    print(f"User Roles: {[role.name for role in current_user.roles]}")
+    print(f"Has 'admin' role: {current_user.has_role('admin')}")
+    print(f"Has 'poster' role: {current_user.has_role('poster')}")
+    # --- デバッグコード終了 ---
+
     # ここにデバッグ用のprint文を追加
     print(f"DEBUG (admin.index): current_user.is_authenticated = {current_user.is_authenticated}")
     print(f"DEBUG (admin.index): current_user.email = {current_user.email if current_user.is_authenticated else 'Not authenticated'}")
@@ -297,14 +306,14 @@ def edit_post(post_id):
         flash('投稿が見つかりません。', 'danger')
         return redirect(url_for('blog_admin_bp.list_posts'))
 
-    if not (current_user.has_role('admin') or post.posted_by_id == current_user.id):
+    if not (current_user.has_role('admin') or current_user.has_role('poster') or post.posted_by_id == current_user.id):
         flash('この投稿を編集する権限がありません。', 'danger')
         return redirect(url_for('blog_admin_bp.list_posts'))
 
     form = PostForm(obj=post) 
 
     form.category.choices = [(str(c.id), c.name) for c in Category.query.all()]
-    form.tags.choices = [(t.id, t.name) for t in Tag.query.order_by(Tag.name).all()]
+    form.tags.choices = [(str(t.id), t.name) for t in Tag.query.order_by(Tag.name).all()]
 
     if request.method == 'GET':
         if post.main_image:
@@ -442,7 +451,7 @@ def edit_post(post_id):
 @login_required
 def delete_post(post_id):
     # 手動の権限チェック
-    required_roles = ['admin', 'editor']
+    required_roles = ['admin', 'poster']
     if not any(Permission(RoleNeed(role_name)).can() for role_name in required_roles):
         flash('アクセス権限がありません。', 'danger')
         abort(403) # または redirect(url_for('home.index')) など
@@ -452,7 +461,7 @@ def delete_post(post_id):
         flash('投稿が見つかりません。', 'danger')
         return redirect(url_for('blog_admin_bp.list_posts'))
 
-    if not (current_user.has_role('admin') or (current_user.has_role('editor') and post_to_delete.posted_by_id == current_user.id)):
+    if not (current_user.has_role('admin') or (current_user.has_role('poster') and post_to_delete.posted_by_id == current_user.id)):
         flash('この投稿を削除する権限がありません。', 'danger')
         return redirect(url_for('blog_admin_bp.list_posts'))
     
@@ -473,7 +482,7 @@ def delete_post(post_id):
 @login_required
 def list_categories():
     # 手動の権限チェック
-    required_roles = ['admin', 'editor']
+    required_roles = ['admin']
     if not any(Permission(RoleNeed(role_name)).can() for role_name in required_roles):
         flash('アクセス権限がありません。', 'danger')
         abort(403) # または redirect(url_for('home.index')) など
@@ -484,7 +493,7 @@ def list_categories():
 
 @bp.route('/categories/add', methods=['GET', 'POST'])
 @login_required
-@roles_required('admin', 'editor')
+@roles_required('admin')
 def add_category():
     from app.forms import CategoryForm 
     form = CategoryForm()
@@ -507,7 +516,7 @@ def add_category():
 @login_required
 def edit_category(category_id):
     # 手動の権限チェック
-    required_roles = ['admin', 'editor']
+    required_roles = ['admin']
     if not any(Permission(RoleNeed(role_name)).can() for role_name in required_roles):
         flash('アクセス権限がありません。', 'danger')
         abort(403) # または redirect(url_for('home.index')) など
@@ -530,7 +539,7 @@ def edit_category(category_id):
 @login_required
 def delete_category(category_id):
     # 手動の権限チェック
-    required_roles = ['admin', 'editor']
+    required_roles = ['admin']
     if not any(Permission(RoleNeed(role_name)).can() for role_name in required_roles):
         flash('アクセス権限がありません。', 'danger')
         abort(403) # または redirect(url_for('home.index')) など
@@ -558,7 +567,7 @@ def delete_category(category_id):
 @login_required
 def list_tags():
     # 手動の権限チェック
-    required_roles = ['admin', 'editor']
+    required_roles = ['admin']
     if not any(Permission(RoleNeed(role_name)).can() for role_name in required_roles):
         flash('アクセス権限がありません。', 'danger')
         abort(403) # または redirect(url_for('home.index')) など
@@ -571,7 +580,7 @@ def list_tags():
 @login_required
 def add_tag():
     # 手動の権限チェック
-    required_roles = ['admin', 'editor']
+    required_roles = ['admin']
     if not any(Permission(RoleNeed(role_name)).can() for role_name in required_roles):
         flash('アクセス権限がありません。', 'danger')
         abort(403) # または redirect(url_for('home.index')) など
@@ -579,7 +588,8 @@ def add_tag():
     from app.forms import TagForm 
     form = TagForm()
     if form.validate_on_submit():
-        new_tag = Tag(name=form.name.data)
+        slug = form.slug.data if form.slug.data else slugify(form.name.data)
+        new_tag = Tag(name=form.name.data, slug=slug, user_id=current_user.id)
         db.session.add(new_tag)
         db.session.commit()
         flash('新しいタグが追加されました。', 'success')
@@ -590,7 +600,7 @@ def add_tag():
 @login_required
 def edit_tag(tag_id):
     # 手動の権限チェック
-    required_roles = ['admin', 'editor']
+    required_roles = ['admin']
     if not any(Permission(RoleNeed(role_name)).can() for role_name in required_roles):
         flash('アクセス権限がありません。', 'danger')
         abort(403) # または redirect(url_for('home.index')) など
@@ -604,6 +614,7 @@ def edit_tag(tag_id):
     form = TagForm(obj=tag)
     if form.validate_on_submit():
         tag.name = form.name.data
+        tag.slug = form.slug.data if form.slug.data else slugify(form.name.data)
         db.session.commit()
         flash('タグ名が更新されました。', 'success')
         return redirect(url_for('blog_admin_bp.list_tags'))
@@ -613,7 +624,7 @@ def edit_tag(tag_id):
 @login_required
 def delete_tag(tag_id):
     # 手動の権限チェック
-    required_roles = ['admin', 'editor']
+    required_roles = ['admin']
     if not any(Permission(RoleNeed(role_name)).can() for role_name in required_roles):
         flash('アクセス権限がありません。', 'danger')
         abort(403) # または redirect(url_for('home.index')) など
@@ -684,7 +695,7 @@ def upload_image():
 
     form = ImageUploadForm()
     if form.validate_on_submit():
-        image_file = form.image_file.data
+        image_file = form.image.data
         if image_file and allowed_file(image_file.filename):
             original_filename = secure_filename(image_file.filename)
             unique_filename = str(uuid.uuid4()) + os.path.splitext(original_filename)[1] # 拡張子を取得
@@ -760,8 +771,8 @@ def bulk_upload_images():
                         thumbnail_filename = None
                         thumbnail_filepath_abs = None 
 
-                    filepath_rel = os.path.join(current_app.config['UPLOAD_FOLDER_RELATIVE_PATH'], unique_filename).replace('', '/')
-                    thumbnail_filepath_rel = os.path.join(current_app.config['THUMBNAIL_FOLDER_RELATIVE_PATH'], thumbnail_filename).replace('', '/') if thumbnail_filename else None
+                    filepath_rel = os.path.join(current_app.config['UPLOAD_FOLDER_RELATIVE_PATH'], unique_filename).replace('\\', '/')
+                    thumbnail_filepath_rel = os.path.join(current_app.config['THUMBNAIL_FOLDER_RELATIVE_PATH'], thumbnail_filename).replace('\\', '/') if thumbnail_filename else None
 
                     new_image = Image(
                         original_filename=original_filename,
@@ -809,7 +820,7 @@ def edit_image(image_id):
         return redirect(url_for('blog_admin_bp.list_images'))
 
     form = ImageUploadForm(obj=image)
-    form.image_file.validators = [Optional(), FileAllowed(['jpg', 'jpeg', 'png', 'gif', 'webp'], '画像ファイル (JPG, JPEG, PNG, GIF, WEBP) のみ許可されます')]
+    form.image.validators = [Optional(), FileAllowed(['jpg', 'jpeg', 'png', 'gif', 'webp'], '画像ファイル (JPG, JPEG, PNG, GIF, WEBP) のみ許可されます')]
 
 
     if form.validate_on_submit():
@@ -906,12 +917,12 @@ def edit_user(user_id):
     form = UserEditForm(obj=user) 
     
     # ロールの選択肢をフォームに設定
-    form.roles.choices = [(r.id, r.name) for r in Role.query.order_by(Role.name).all()]
+    form.roles.choices = [(str(r.id), r.name) for r in Role.query.order_by(Role.name).all()]
 
     if form.validate_on_submit():
         user.username = form.username.data
         user.email = form.email.data
-        user.is_active = form.is_active.data
+        user.active = form.is_active.data
 
         # パスワードが入力された場合のみ更新
         if form.password.data:
@@ -971,7 +982,7 @@ def delete_user(user_id):
 @login_required
 def list_comments():
     # 手動の権限チェック
-    required_roles = ['admin', 'editor', 'poster']
+    required_roles = ['admin']
     if not any(Permission(RoleNeed(role_name)).can() for role_name in required_roles):
         flash('アクセス権限がありません。', 'danger')
         abort(403) # または redirect(url_for('home.index')) など
@@ -1004,7 +1015,7 @@ def approve_comment(comment_id):
 @login_required
 def edit_comment(comment_id):
     # 手動の権限チェック
-    required_roles = ['admin', 'editor']
+    required_roles = ['admin']
     if not any(Permission(RoleNeed(role_name)).can() for role_name in required_roles):
         flash('アクセス権限がありません。', 'danger')
         abort(403)
@@ -1030,7 +1041,7 @@ def edit_comment(comment_id):
 @login_required
 def delete_comment(comment_id):
     # 手動の権限チェック
-    required_roles = ['admin', 'editor']
+    required_roles = ['admin']
     if not any(Permission(RoleNeed(role_name)).can() for role_name in required_roles):
         flash('アクセス権限がありません。', 'danger')
         abort(403)
@@ -1053,16 +1064,81 @@ def delete_comment(comment_id):
 
 @bp.route('/roles')
 @login_required
+@roles_required('admin')
 def manage_roles():
-    # 手動の権限チェック
-    required_roles = ['admin']
-    if not any(Permission(RoleNeed(role_name)).can() for role_name in required_roles):
-        flash('アクセス権限がありません。', 'danger')
-        abort(403) # または redirect(url_for('home.index')) など
+    """ロールを管理する"""
+    from app.forms import DeleteForm
+    roles = Role.query.order_by(Role.name).all()
+    csrf_form = DeleteForm()
+    return render_template('roles/manage_roles.html', roles=roles, csrf_form=csrf_form, title='ロール管理')
 
-    # ロール一覧を取得してテンプレートに渡す
-    roles = Role.query.all()
-    return render_template('admin/roles.html', roles=roles)
+# --- ロール管理 ---
+
+@bp.route('/roles/add', methods=['GET', 'POST'])
+@login_required
+@roles_required('admin')
+def add_role():
+    """新しいロールを追加する"""
+    from app.forms import RoleForm
+    form = RoleForm()
+    if form.validate_on_submit():
+        new_role = Role(name=form.name.data, description=form.description.data)
+        db.session.add(new_role)
+        db.session.commit()
+        flash('新しいロールが追加されました。', 'success')
+        return redirect(url_for('blog_admin_bp.manage_roles'))
+    return render_template('roles/add_edit_role.html', form=form, title='新規ロール追加')
+
+@bp.route('/roles/edit/<int:role_id>', methods=['GET', 'POST'])
+@login_required
+@roles_required('admin')
+def edit_role(role_id):
+    """既存のロールを編集する"""
+    from app.forms import RoleForm
+    role = db.session.get(Role, role_id)
+    if role is None:
+        flash('ロールが見つかりません。', 'danger')
+        return redirect(url_for('blog_admin_bp.manage_roles'))
+    
+    form = RoleForm(obj=role, original_name=role.name)
+    if form.validate_on_submit():
+        role.name = form.name.data
+        role.description = form.description.data
+        db.session.commit()
+        flash('ロール情報が更新されました。', 'success')
+        return redirect(url_for('blog_admin_bp.manage_roles'))
+    
+    return render_template('roles/add_edit_role.html', form=form, role=role, title='ロール編集')
+
+@bp.route('/roles/delete/<int:role_id>', methods=['POST'])
+@login_required
+@roles_required('admin')
+def delete_role(role_id):
+    """ロールを削除する"""
+    role_to_delete = db.session.get(Role, role_id)
+    if role_to_delete is None:
+        flash('ロールが見つかりません。', 'danger')
+        return redirect(url_for('blog_admin_bp.manage_roles'))
+
+    # ロールに属するユーザーがいる場合は削除させない
+    if role_to_delete.users.count() > 0:
+        flash('このロールにはユーザーが割り当てられているため、削除できません。', 'warning')
+        return redirect(url_for('blog_admin_bp.manage_roles'))
+
+    # 基本的なロール(admin, userなど)は削除させない等の追加チェックも可能
+    if role_to_delete.name in ['admin', 'user', 'poster']:
+        flash(f'基本的なロール \'{role_to_delete.name}\' は削除できません。', 'warning')
+        return redirect(url_for('blog_admin_bp.manage_roles'))
+
+    try:
+        db.session.delete(role_to_delete)
+        db.session.commit()
+        flash('ロールが削除されました。', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'ロールの削除中にエラーが発生しました: {e}', 'danger')
+    
+    return redirect(url_for('blog_admin_bp.manage_roles'))
 
 @bp.route('/posts/toggle_publish/<uuid:post_id>', methods=['POST'])
 @login_required
@@ -1093,18 +1169,18 @@ def add_user():
         abort(403) # または redirect(url_for('home.index')) など
 
     form = UserEditForm()
-    form.roles.choices = [(r.id, r.name) for r in Role.query.order_by(Role.name).all()]
+    form.roles.choices = [(str(r.id), r.name) for r in Role.query.order_by(Role.name).all()]
 
     if form.validate_on_submit():
         user = User(
             username=form.username.data,
             email=form.email.data,
-            is_active=form.is_active.data
+            active=form.is_active.data
         )
         if form.password.data:
             user.password_hash = generate_password_hash(form.password.data)
-        if form.role.data:
-            user.roles = Role.query.filter(Role.id.in_(form.role.data)).all()
+        if form.roles.data:
+            user.roles = form.roles.data
         db.session.add(user)
         db.session.commit()
         flash('ユーザーが追加されました。', 'success')

@@ -39,11 +39,14 @@
                 <td>{{ item.username }}</td>    {# item.username に変更 #}
                 <td>{{ item.email }}</td>       {# item.email に変更 #}
                 <td>
-                    {# ロールは item.role_name を直接表示 #}
-                    <span class="badge bg-info me-1">{{ item.role_name }}</span>
+                    {% for role in item.roles %}
+                        <span class="badge bg-info me-1">{{ role.name }}</span>
+                    {% else %}
+                        N/A
+                    {% endfor %}
                 </td>
-                <td>{{ item.registration_date.strftime('%Y-%m-%d %H:%M') if item.registration_date else 'N/A' }}</td> {# item.registration_date に変更 #}
-                <td>{{ item.last_login.strftime('%Y-%m-%d %H:%M') if item.last_login else 'N/A' }}</td>             {# item.last_login に変更 #}
+                <td>{{ item.created_at.strftime('%Y-%m-%d %H:%M') if item.created_at else 'N/A' }}</td>
+                <td>{{ item.last_login_at.strftime('%Y-%m-%d %H:%M') if item.last_login_at else 'N/A' }}</td>
                 <td>
                     <div class="btn-group" role="group">
                         <a href="{{ url_for('blog_admin_bp.edit_user', user_id=item.id) }}" class="btn btn-sm btn-info">編集（ロール変更も含む）</a> {# user_id=item.id に変更 #}
